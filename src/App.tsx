@@ -566,56 +566,76 @@ function WorkspaceApp({
   const pageMeta = page === 'campaign-detail' ? pageTitles['campaign-detail'] : pageTitles[page];
   const openCreate = (kind: Exclude<ModalKind,null>) => setModal(kind);
   const openCampaign = (id: string) => { setSelectedCampaign(id); setCampaignTab('Overview'); navigate('campaign-detail'); };
-  const createRecord = (values: Record<string, any>) => {
-    switch (modal) {
-      case 'campaign': {
-        const next: Campaign = { id: makeId('CAM', data.campaigns.length, data.campaigns.map(c=>c.id)), name: values.name, objective: values.objective, owner: values.owner, startDate: values.startDate, endDate: values.endDate, targetRevenue: values.targetRevenue, plannedBudget: values.plannedBudget, channels: values.channels, status: values.status };
-        update('campaigns', curr => [next, ...curr]); notify('Campaign berhasil disimpan di perangkat ini.'); break;
+  const createRecord = async (values: Record<string, any>) => {
+    try {
+      let successMessage = '';
+      switch (modal) {
+        case 'campaign': {
+          const next: Campaign = { id: makeId('CAM', data.campaigns.length, data.campaigns.map(c=>c.id)), name: values.name, objective: values.objective, owner: values.owner, startDate: values.startDate, endDate: values.endDate, targetRevenue: values.targetRevenue, plannedBudget: values.plannedBudget, channels: values.channels, status: values.status };
+          await update('campaigns', curr => [next, ...curr]); successMessage = 'Campaign tersimpan di PostgreSQL.'; break;
+        }
+        case 'task': case 'action': {
+          const next: Task = { id: makeId('TSK', data.tasks.length, data.tasks.map(t=>t.id)), title: values.title, description: values.description, owner: values.owner || 'Marketing Lead', assignee: values.assignee, priority: values.priority || 'Medium', status: values.status || 'To Do', dueDate: values.dueDate, campaignId: values.campaignId };
+          await update('tasks', curr => [next, ...curr]); successMessage = 'Task tersimpan di PostgreSQL.'; break;
+        }
+        case 'content': {
+          const next: ContentItem = { id: makeId('CNT', data.contents.length, data.contents.map(c=>c.id)), title: values.title, platform: values.platform, pillar: values.pillar, format: values.format, hook: values.hook, cta: values.cta, owner: values.owner, status: values.status, publishDate: values.publishDate, campaignId: values.campaignId, views: 0, engagement: 0 };
+          await update('contents', curr => [next, ...curr]); successMessage = 'Content record tersimpan di PostgreSQL.'; break;
+        }
+        case 'expense': {
+          const next: Expense = { id: makeId('EXP', data.expenses.length, data.expenses.map(e=>e.id)), title: values.title, category: values.category, vendor: values.vendor, amount: values.amount, date: values.date, channel: values.channel, type: values.type, campaignId: values.campaignId };
+          await update('expenses', curr => [next, ...curr]); successMessage = 'Expense tersimpan di PostgreSQL.'; break;
+        }
+        case 'kol': {
+          const next: Kol = { id: makeSequentialId('KOL', data.kols.map(k=>k.id), 5), name: values.name, platform: values.platform, handle: values.handle, instagramUrl: values.instagramUrl || '', niche: values.niche, contact: values.contact || '', rate: values.rate, stage: values.stage, campaignId: values.campaignId, publishDate: values.publishDate || undefined, notes: values.notes };
+          await update('kols', curr => [next, ...curr]); successMessage = 'Creator tersimpan di PostgreSQL.'; break;
+        }
+        case 'order': {
+          const exists = data.orders.some(o=>o.id===values.id);
+          if (exists) { notify('Order ID sudah ada. Record duplikat ditolak.'); return; }
+          const next: Order = { id: values.id, source: values.source, date: values.date, status: values.status, amount: values.amount, utm: values.utm, campaignId: values.campaignId };
+          await update('orders', curr => [next, ...curr]); successMessage = 'Order tersimpan pada data browser lokal.'; break;
+        }
+        case 'brief': {
+          const next: Brief = { id: makeSequentialId('BRF', data.briefs.map(b=>b.id), 4), title: values.title, type: values.type, campaignId: values.campaignId, status: values.status, owner: values.owner, updatedAt: jakartaDateKey() };
+          await update('briefs', curr => [next, ...curr]); successMessage = 'Brief tersimpan di PostgreSQL.'; break;
+        }
+        case 'experiment': {
+          const next: Experiment = { id: makeSequentialId('EXP-TEST', data.experiments.map(e=>e.id), 3), name: values.name, hypothesis: values.hypothesis, changeMade: values.changeMade, primaryMetric: values.primaryMetric, successCriteria: values.successCriteria, owner: values.owner, status: values.status || 'Planned', startDate: values.startDate, endDate: values.endDate || undefined, campaignId: values.campaignId };
+          await update('experiments', curr => [next, ...curr]); successMessage = 'Experiment tersimpan di PostgreSQL.'; break;
+        }
+        case 'competitor': {
+          const next: Competitor = { id: makeSequentialId('CMP', data.competitors.map(c=>c.id), 4), name: values.name, platform: values.platform, handle: values.handle, url: values.url, label: values.label, notes: values.notes, status: values.status };
+          await update('competitors', curr => [next, ...curr]); successMessage = 'Competitor tersimpan di PostgreSQL.'; break;
+        }
       }
-      case 'task': case 'action': {
-        const next: Task = { id: makeId('TSK', data.tasks.length, data.tasks.map(t=>t.id)), title: values.title, description: values.description, owner: values.owner || 'Marketing Lead', assignee: values.assignee, priority: values.priority || 'Medium', status: values.status || 'To Do', dueDate: values.dueDate, campaignId: values.campaignId };
-        update('tasks', curr => [next, ...curr]); notify('Task berhasil dibuat.'); break;
-      }
-      case 'content': {
-        const next: ContentItem = { id: makeId('CNT', data.contents.length, data.contents.map(c=>c.id)), title: values.title, platform: values.platform, pillar: values.pillar, format: values.format, hook: values.hook, cta: values.cta, owner: values.owner, status: values.status, publishDate: values.publishDate, campaignId: values.campaignId, views: 0, engagement: 0 };
-        update('contents', curr => [next, ...curr]); notify('Content record berhasil dibuat.'); break;
-      }
-      case 'expense': {
-        const next: Expense = { id: makeId('EXP', data.expenses.length, data.expenses.map(e=>e.id)), title: values.title, category: values.category, vendor: values.vendor, amount: values.amount, date: values.date, channel: values.channel, type: values.type, campaignId: values.campaignId };
-        update('expenses', curr => [next, ...curr]); notify('Expense berhasil dicatat.'); break;
-      }
-      case 'kol': {
-        const next: Kol = { id: makeSequentialId('KOL', data.kols.map(k=>k.id), 5), name: values.name, platform: values.platform, handle: values.handle, instagramUrl: values.instagramUrl, niche: values.niche, contact: values.contact, rate: values.rate, stage: values.stage, campaignId: values.campaignId, publishDate: values.publishDate || undefined, notes: values.notes };
-        update('kols', curr => [next, ...curr]); notify('Creator berhasil ditambahkan.'); break;
-      }
-      case 'order': {
-        const exists = data.orders.some(o=>o.id===values.id);
-        if (exists) { notify('Order ID sudah ada. Record duplikat ditolak.'); break; }
-        const next: Order = { id: values.id, source: values.source, date: values.date, status: values.status, amount: values.amount, utm: values.utm, campaignId: values.campaignId };
-        update('orders', curr => [next, ...curr]); notify('Order berhasil dicatat.'); break;
-      }
-      case 'brief': {
-        const next: Brief = { id: makeSequentialId('BRF', data.briefs.map(b=>b.id), 4), title: values.title, type: values.type, campaignId: values.campaignId, status: values.status, owner: values.owner, updatedAt: jakartaDateKey() };
-        update('briefs', curr => [next, ...curr]); notify('Brief berhasil dibuat.'); break;
-      }
-      case 'experiment': {
-        const next: Experiment = { id: makeSequentialId('EXP-TEST', data.experiments.map(e=>e.id), 3), name: values.name, hypothesis: values.hypothesis, changeMade: values.changeMade, primaryMetric: values.primaryMetric, successCriteria: values.successCriteria, owner: values.owner, status: values.status || 'Planned', startDate: values.startDate, endDate: values.endDate, campaignId: values.campaignId };
-        update('experiments', curr => [next, ...curr]); notify('Experiment log berhasil dibuat.'); break;
-      }
-      case 'competitor': {
-        const next: Competitor = { id: makeSequentialId('CMP', data.competitors.map(c=>c.id), 4), name: values.name, platform: values.platform, handle: values.handle, url: values.url, label: values.label, notes: values.notes, status: values.status };
-        update('competitors', curr => [next, ...curr]); notify('Akun kompetitor ditambahkan. Hanya data publik/manual yang didukung.'); break;
-      }
+      setModal(null);
+      if (successMessage) notify(successMessage);
+    } catch (error) {
+      notify(error instanceof Error ? `Gagal menyimpan: ${error.message}` : 'Gagal menyimpan data ke server.');
     }
-    setModal(null);
   };
 
-  const updateTaskStatus = (id: string, status: string) => update('tasks', curr => curr.map(t=>t.id===id?{...t,status}:t));
-  const updateContentStatus = (id: string, status: string) => update('contents', curr => curr.map(c=>c.id===id?{...c,status}:c));
-  const removeRecord = (type: 'campaigns'|'tasks'|'contents'|'expenses'|'kols'|'orders'|'briefs'|'competitors', id: string) => {
+  const updateTaskStatus = (id: string, status: string) => {
+    void update('tasks', curr => curr.map(t=>t.id===id?{...t,status}:t))
+      .catch(error => notify(error instanceof Error ? `Gagal memperbarui task: ${error.message}` : 'Gagal memperbarui task.'));
+  };
+  const updateContentStatus = (id: string, status: string) => {
+    void update('contents', curr => curr.map(c=>c.id===id?{...c,status}:c))
+      .catch(error => notify(error instanceof Error ? `Gagal memperbarui content: ${error.message}` : 'Gagal memperbarui content.'));
+  };
+  const removeRecord = async (type: 'campaigns'|'tasks'|'contents'|'expenses'|'kols'|'orders'|'briefs'|'competitors', id: string) => {
     const names: Record<string,string> = { campaigns:'Campaign',tasks:'Task',contents:'Content',expenses:'Expense',kols:'Creator',orders:'Order',briefs:'Brief',competitors:'Competitor' };
-    if (!window.confirm(`Hapus ${names[type]} ${id}? Data lokal akan dihapus dari workspace demo.`)) return;
-    update(type, (curr: any) => curr.filter((item: any)=>item.id!==id) as any); notify(`${names[type]} dihapus dari data lokal.`);
+    if (!window.confirm(`Hapus ${names[type]} ${id} dari workspace? Perubahan akan disimpan ke sumber data yang aktif.`)) return;
+    try {
+      if (type === 'competitors') {
+        await update('competitorPosts', curr => curr.filter(item => item.competitorId !== id));
+      }
+      await update(type, (curr: any) => curr.filter((item: any)=>item.id!==id) as any);
+      notify(`${names[type]} dihapus dari workspace.`);
+    } catch (error) {
+      notify(error instanceof Error ? `Gagal menghapus: ${error.message}` : 'Gagal menghapus record.');
+    }
   };
 
   const exportJSON = () => {
