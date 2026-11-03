@@ -1,82 +1,93 @@
 # NEXUS — Marketing Intelligence & Operations PWA
 
-**Implementation baseline:** PRD NEXUS v0.3 · Nocturne / Midnight Observatory
+**Baseline:** PRD NEXUS v0.3 · Nocturne / Midnight Observatory  
+**Current implementation:** React/Vite demo frontend + backend data-integration foundation.
 
-This repository contains an executable React + TypeScript + Vite PWA baseline. It implements the information architecture and major operational workflows with browser-local persistence and an offline app shell. It is intentionally marked **LOCAL DEMO BUILD** because the PRD leaves production authentication, hosting, database, AI provider, and external API contracts open.
+The frontend still runs as a local demo by default. The backend foundation adds a PostgreSQL schema, workspace-scoped API, OIDC token verification boundary, encrypted-secret utility, normalized integration data contracts and persistent sync-job metadata. It does not mean provider APIs are connected.
 
-## What is implemented
+## Frontend already implemented
 
-- Responsive Nocturne app shell: desktop sidebar, tablet/mobile navigation drawer, mobile bottom navigation, compact data density, safe-area spacing, focus states, and reduced-motion handling.
-- All primary destinations from the PRD: Overview, Brief Library, Campaigns and Campaign Workspace, Budget Control, Tasks & Approvals, Content Calendar, Content Studio, Ads & Sales, KOL & Creators, Performance Analytics, Competitor Intelligence, AI Insight Lab, Reports & Exports, Integrations, Settings, and Owner-only Access Management UI.
-- Local CRUD workflows for campaigns, briefs, tasks, content records, expenses, KOL profiles, orders, and competitor accounts. Task and content status transitions are editable.
-- Campaign relationships using human-readable IDs (CAM, CNT, TSK, EXP, KOL), quick navigation to campaign context, and local activity/data summaries.
-- CSV preview/import for orders and Ads records, sample templates in `templates/`, plus CSV exports.
-- Local JSON backup and restore.
-- Source-aware placeholders and explicit N/A states. Demo/sample records are labeled; actual sales are separated from Ads-attributed revenue.
-- Context-aware assistant drawer with rule-based demo findings, evidence/data-gap labels, and action-item handoff. It does not pretend to be a connected AI model.
-- PWA manifest, app icon, service worker app-shell/runtime caching, offline status, and last-known local data.
-- Floating Back appears only in the multi-step campaign creation flow after step one; returning to the previous step preserves form state.
-- Manual report preview with browser Print / Save as PDF. The production daily scheduler and Gmail delivery are explicitly not active.
-- Asia/Jakarta calendar-date helpers for date ranges and form defaults; UTC timestamps remain ISO timestamps for audit fields.
+- Responsive Nocturne app shell and all main workflow destinations.
+- Local CRUD for campaigns, briefs, tasks, content, expenses, KOL, orders and competitors.
+- CSV preview/import and CSV/JSON export.
+- Source-aware demo placeholders; actual sales remain separate from Ads-attributed revenue.
+- PWA manifest, service worker shell and offline behavior.
+- Asia/Jakarta date helpers.
 
-## Run locally
+## Backend foundation added
 
-Requirements: Node.js 20+ and npm.
+- Fastify API on port 8787, separate from Vite's port 5173.
+- PostgreSQL tables for workspaces, memberships, integration connections/secrets, sync jobs/cursors, orders, daily Ads metrics, social metrics, content snapshots, source lineage and audit logs.
+- PostgreSQL Row-Level Security policies for workspace-scoped tables.
+- OIDC JWT verification through configured issuer, audience and JWKS URL.
+- AES-256-GCM token-vault utility. Secrets are not exposed by integration API responses.
+- Server-only provider connector registry and normalized order upsert boundary.
+- Health, workspace, integration metadata and sync-job API routes.
+
+No Meta Ads, Scalev, Lynk.id, Instagram, TikTok or YouTube provider adapter is registered yet. OAuth callbacks, token refresh, background worker execution and live dashboard reads remain separate implementation stages.
+
+## Requirements
+
+- Node.js 20+
+- npm
+- PostgreSQL 15+
+
+## Local setup
+
+1. Install packages:
+
+   ```bash
+   npm install
+   ```
+
+2. Copy `.env.example` to `.env` and configure `DATABASE_URL`. Use a separate schema-owner URL in `MIGRATION_DATABASE_URL` for local migrations if available.
+
+3. Create the PostgreSQL database and roles, then apply the migration:
+
+   ```bash
+   npm run db:migrate
+   ```
+
+4. Run the frontend:
+
+   ```bash
+   npm run dev
+   ```
+
+5. In a second terminal, run the API:
+
+   ```bash
+   npm run dev:api
+   ```
+
+6. Check API status:
+
+   - `http://localhost:8787/health/live`
+   - `http://localhost:8787/health/ready`
+
+The existing frontend uses localStorage key `nexus.workspace.v03`; it is not yet wired to these API endpoints. Authenticated routes return an explicit 503 until OIDC settings are configured. Do not enable fake local authentication.
+
+## Database security requirement
+
+Run migrations with a role that owns the schema/tables. The API's `DATABASE_URL` must use a separate runtime role that does **not** own tables and does not have `BYPASSRLS`. PostgreSQL table owners bypass RLS unless forced, so using the migration owner as the API role defeats the tenant boundary.
+
+The API sets `nexus.user_id` and `nexus.workspace_id` with transaction-local settings. Keep them transaction-scoped when using pooled connections.
+
+## Useful commands
 
 ```bash
-npm install
-npm run dev
-```
-
-Open the local URL printed by Vite (normally `http://localhost:5173`). The service worker and installability should be tested on `localhost` or HTTPS. For a production bundle:
-
-```bash
+npm run typecheck
+npm run typecheck:server
 npm run build
-npm run preview
+npm run build:server
+npm run test:server
 ```
 
-## Demo behavior
+## Documentation
 
-The first launch seeds a clearly labeled sample workspace. Records are persisted in the current browser origin under localStorage key `nexus.workspace.v03`. Data is not shared between browsers or team members. Use **Settings → Local data backup** to export or restore the current browser's records.
+- [Data Integration Foundation](docs/DATA_INTEGRATION_FOUNDATION.md)
+- [Production Gaps](docs/PRODUCTION_GAPS.md)
 
-The profile switch in the sidebar is a **visual role simulation only**. It is not authentication and does not enforce server security. Do not put real customer, KOL, financial, credentials, or order data into this local demo build.
+## Explicit production gaps
 
-## Important production gaps
-
-See [`docs/PRODUCTION_GAPS.md`](docs/PRODUCTION_GAPS.md) for the PRD traceability matrix and the components that need a trusted backend before go-live. In particular, this build does not implement server-side allowlisting/session revocation, a shared database, official provider OAuth, Gmail delivery, Google Drive backup, server-side 00:00 WIB scheduling, push notifications, or a hosted AI model/RAG service.
-
-## Project structure
-
-```text
-nexus-pwa/
-├── index.html
-├── package.json
-├── tsconfig.json
-├── vite.config.ts
-├── public/
-│   ├── manifest.webmanifest
-│   ├── sw.js
-│   └── icons/
-│       ├── nexus.svg
-│       ├── nexus-192.png
-│       └── nexus-512.png
-├── src/
-│   ├── App.tsx          # application shell, navigation, pages and workflow interactions
-│   ├── domain.ts        # domain models, local demo seed, IDs and formatters
-│   ├── contracts/       # provider, AI evidence and report scheduling contracts
-│   ├── main.tsx         # React entry point and service-worker registration
-│   └── styles.css       # Nocturne design system and responsive layout
-├── templates/            # CSV import templates
-│   ├── ads-import-template.csv
-│   └── orders-import-template.csv
-└── docs/
-    └── PRODUCTION_GAPS.md
-```
-
-## Design notes
-
-- UI surfaces use layered translucency; tables and forms use a higher-opacity glass surface for readability.
-- No remote fonts, icon CDNs, image CDNs, or external runtime assets are required.
-- Charts are rendered as inline SVG to avoid chart dependencies in the offline shell.
-- Motion uses opacity/transform; `prefers-reduced-motion` is respected.
-- This is a frontend application baseline, not a deployed multi-user production service.
+This is not yet a live multi-user or provider-connected release. Identity-provider deployment configuration, workspace invite/allowlist workflows, official provider OAuth/API adapters, token refresh, queue worker and retry scheduler, connector-specific normalization, live dashboard queries, deployment secrets management, operational monitoring and security testing remain before production use.
