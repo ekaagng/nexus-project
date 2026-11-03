@@ -237,6 +237,24 @@ async function verifyIdentityToken(
   }
 }
 
+async function withAuthTransaction<T>(
+  pool: Pool,
+  operation: (client: import('pg').PoolClient) => Promise<T>
+): Promise<T> {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await operation(client);
+    await client.query('COMMIT');
+    return result;
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 async function createSession(
   pool: Pool,
   config: AppConfig,
@@ -436,16 +454,19 @@ export async function registerAuthRoutes(
     const parsed = sessionIdSchema.safeParse(request.params);
     if (!parsed.success) throw new AppError(400, 'invalid_session_id', 'A valid session ID is required.');
 
-    const revoked = await pool.query<{ id: string }>(
-      'UPDATE public.auth_sessions SET revoked_at = NOW() WHERE id = $1::uuid AND user_id = $2 AND revoked_at IS NULL RETURNING id',
-      [parsed.data.sessionId, user.userId]
-    );
-    if (!revoked.rowCount) throw new AppError(404, 'session_not_found', 'An active session with this ID was not found.');
-
-    await pool.query(
-      "INSERT INTO public.auth_security_events (user_id, session_id, event_type) VALUES ($1, $2::uuid, 'session.revoked')",
-      [user.userId, parsed.data.sessionId]
-    );
+    await withAuthTransaction(pool, async (client) => {
+      const revoked = await client.query<{ id: string }>(
+        'UPDATE public.auth_sessions SET revoked_at = NOW() WHERE id = $1::uuid AND user_id = $2 AND revoked_at IS NULL RETURNING id',
+        [parsed.data.sessionId, user.userId]
+      );
+      if (!revoked.rowCount) {
+        throw new AppError(404, 'session_not_found', 'An active session with this ID was not found.');
+      }
+      await client.query(
+        "INSERT INTO public.auth_security_events (user_id, session_id, event_type) VALUES ($1, $2::uuid, 'session.revoked')",
+        [user.userId, parsed.data.sessionId]
+      );
+    });
     if (parsed.data.sessionId === user.sessionId) {
       reply.header('Set-Cookie', clearCookie(SESSION_COOKIE_NAME, config.sessionCookieSecure));
     }
@@ -458,29 +479,34 @@ export async function registerAuthRoutes(
       throw new AppError(400, 'browser_session_required', 'This endpoint revokes browser sessions. Identity-provider access tokens are managed separately.');
     }
 
-    await pool.query(
-      'UPDATE public.auth_sessions SET revoked_at = NOW() WHERE id = $1::uuid AND user_id = $2 AND revoked_at IS NULL',
-      [user.sessionId, user.userId]
-    );
-    await pool.query(
-      "INSERT INTO public.auth_security_events (user_id, session_id, event_type) VALUES ($1, $2::uuid, 'logout')",
-      [user.userId, user.sessionId]
-    );
+    await withAuthTransaction(pool, async (client) => {
+      await client.query(
+        'UPDATE public.auth_sessions SET revoked_at = NOW() WHERE id = $1::uuid AND user_id = $2 AND revoked_at IS NULL',
+        [user.sessionId, user.userId]
+      );
+      await client.query(
+        "INSERT INTO public.auth_security_events (user_id, session_id, event_type) VALUES ($1, $2::uuid, 'logout')",
+        [user.userId, user.sessionId]
+      );
+    });
     reply.header('Set-Cookie', clearCookie(SESSION_COOKIE_NAME, config.sessionCookieSecure));
     return { loggedOut: true };
   });
 
   app.post('/api/v1/auth/sessions/revoke-all', { preHandler: authenticate }, async (request, reply) => {
     const user = requireUser(request);
-    const revoked = await pool.query<{ id: string }>(
-      'UPDATE public.auth_sessions SET revoked_at = NOW() WHERE user_id = $1 AND revoked_at IS NULL AND expires_at > NOW() RETURNING id',
-      [user.userId]
-    );
-    await pool.query(
-      "INSERT INTO public.auth_security_events (user_id, event_type, metadata) VALUES ($1, 'sessions.revoked', jsonb_build_object('count', $2::integer))",
-      [user.userId, revoked.rowCount ?? 0]
-    );
+    const revokedCount = await withAuthTransaction(pool, async (client) => {
+      const revoked = await client.query<{ id: string }>(
+        'UPDATE public.auth_sessions SET revoked_at = NOW() WHERE user_id = $1 AND revoked_at IS NULL AND expires_at > NOW() RETURNING id',
+        [user.userId]
+      );
+      await client.query(
+        "INSERT INTO public.auth_security_events (user_id, event_type, metadata) VALUES ($1, 'sessions.revoked', jsonb_build_object('count', $2::integer))",
+        [user.userId, revoked.rowCount ?? 0]
+      );
+      return revoked.rowCount ?? 0;
+    });
     reply.header('Set-Cookie', clearCookie(SESSION_COOKIE_NAME, config.sessionCookieSecure));
-    return { revokedCount: revoked.rowCount ?? 0 };
+    return { revokedCount: revokedCount };
   });
 }
