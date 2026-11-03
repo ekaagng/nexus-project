@@ -5,8 +5,15 @@ import { SessionControls } from './auth/SessionControls';
 import type { AuthUser, WorkspaceSummary } from './auth/api';
 import {
   AdMetric, Brief, Campaign, Competitor, ContentItem, Expense, Experiment, Kol, Order,
-  PageId, Task, WorkspaceData, addJakartaDays, compactNumber, demoData, jakartaDateKey, loadWorkspace, makeId, makeSequentialId, rupiah, shortDate, STORAGE_KEY
+  PageId, Task, WorkspaceData, addJakartaDays, compactNumber, createEmptyWorkspaceData, demoData, jakartaDateKey, makeId, makeSequentialId, rupiah, shortDate, STORAGE_KEY
 } from './domain';
+import {
+  loadBusinessCollections, migrateLegacyBusinessCollections,
+  persistBusinessCollectionChanges, replaceBusinessCollections
+} from './data/businessDataApi';
+import {
+  localOnlyWorkspaceData, parseLegacyWorkspace, type BusinessDataKey, BUSINESS_DATA_RESOURCES
+} from './data/businessDataMapping';
 
 type ModalKind = 'campaign'|'task'|'content'|'expense'|'kol'|'order'|'brief'|'competitor'|'action'|'experiment'|null;
 type FieldOption = { label: string; value: string };
@@ -309,8 +316,22 @@ function WorkspaceApp({
   onSignOut: () => Promise<void>;
 }) {
   const workspaceStorageKey = STORAGE_KEY + ':' + workspace.id;
+  const localDataStorageKey = workspaceStorageKey + ':local-v1';
+  const migrationMarkerKey = workspaceStorageKey + ':business-api-v1';
+  const legacyRawRef = useRef<string | null | undefined>(undefined);
+  if (legacyRawRef.current === undefined) {
+    try { legacyRawRef.current = localStorage.getItem(workspaceStorageKey); }
+    catch { legacyRawRef.current = null; }
+  }
   const isOwner = workspace.role === 'owner';
-  const [data, setData] = useState<WorkspaceData>(() => loadWorkspace(workspaceStorageKey));
+  const [data, setData] = useState<WorkspaceData>(() => createEmptyWorkspaceData());
+  const dataRef = useRef(data);
+  const mutationQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const [dataReady, setDataReady] = useState(false);
+  const [dataError, setDataError] = useState('');
+  const [dataStatus, setDataStatus] = useState('Preparing workspace data');
+  const [retryVersion, setRetryVersion] = useState(0);
+  const [savingCount, setSavingCount] = useState(0);
   const [page, setPage] = useState<PageId>('overview');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
@@ -338,8 +359,95 @@ function WorkspaceApp({
   const importInput = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
-    localStorage.setItem(workspaceStorageKey, JSON.stringify({ ...data, updatedAt: new Date().toISOString() }));
-  }, [data, workspaceStorageKey]);
+    let cancelled = false;
+
+    const initializeWorkspaceData = async () => {
+      setDataReady(false);
+      setDataError('');
+      setDataStatus('Checking local workspace snapshot');
+
+      try {
+        let localData: WorkspaceData;
+        const marker = localStorage.getItem(migrationMarkerKey);
+
+        if (!marker) {
+          const legacy = legacyRawRef.current
+            ? parseLegacyWorkspace(legacyRawRef.current)
+            : createEmptyWorkspaceData();
+          let migration = { imported: 0, skipped: 0 };
+
+          if (legacyRawRef.current) {
+            setDataStatus('Migrating existing browser records');
+            migration = await migrateLegacyBusinessCollections(workspace.id, legacy, (resource, completed, total) => {
+              setDataStatus(`Migrating ${resource} · ${completed}/${total}`);
+            });
+          }
+
+          localData = legacy;
+          localStorage.setItem(localDataStorageKey, JSON.stringify(localOnlyWorkspaceData(localData)));
+          localStorage.setItem(migrationMarkerKey, JSON.stringify({
+            version: 1,
+            completedAt: new Date().toISOString(),
+            imported: migration.imported,
+            skipped: migration.skipped,
+            legacySnapshotPreserved: Boolean(legacyRawRef.current)
+          }));
+        } else {
+          const localRaw = localStorage.getItem(localDataStorageKey);
+          if (localRaw) {
+            const localParsed = JSON.parse(localRaw) as Partial<WorkspaceData>;
+            localData = {
+              ...createEmptyWorkspaceData(),
+              ...localParsed,
+              campaigns: [], tasks: [], contents: [], expenses: [], kols: [],
+              briefs: [], experiments: [], competitors: [], competitorPosts: [],
+              orders: localParsed.orders ?? [],
+              ads: localParsed.ads ?? [],
+              notifications: localParsed.notifications ?? [],
+              updatedAt: localParsed.updatedAt ?? new Date().toISOString()
+            };
+          } else if (legacyRawRef.current) {
+            localData = parseLegacyWorkspace(legacyRawRef.current);
+          } else {
+            localData = createEmptyWorkspaceData();
+          }
+        }
+
+        setDataStatus('Loading workspace records from PostgreSQL');
+        const remote = await loadBusinessCollections(workspace.id);
+        const next: WorkspaceData = {
+          ...createEmptyWorkspaceData(),
+          ...remote,
+          orders: localData.orders,
+          ads: localData.ads,
+          notifications: localData.notifications,
+          updatedAt: new Date().toISOString()
+        };
+
+        if (cancelled) return;
+        dataRef.current = next;
+        setData(next);
+        setDataReady(true);
+        setDataStatus('Workspace data is synchronized');
+      } catch (error) {
+        if (cancelled) return;
+        setDataError(error instanceof Error ? error.message : 'Workspace data could not be loaded.');
+        setDataStatus('Workspace data needs attention');
+      }
+    };
+
+    void initializeWorkspaceData();
+    return () => { cancelled = true; };
+  }, [workspace.id, retryVersion]);
+
+  useEffect(() => {
+    if (!dataReady) return;
+    try {
+      localStorage.setItem(localDataStorageKey, JSON.stringify(localOnlyWorkspaceData(data)));
+    } catch {
+      setDataError('Browser-local orders, Ads, or notifications could not be saved. Export a JSON backup before continuing.');
+    }
+  }, [data.orders, data.ads, data.notifications, data.updatedAt, dataReady, localDataStorageKey]);
   useEffect(() => {
     const onOnline = () => setOnline(true);
     const onOffline = () => setOnline(false);
@@ -356,9 +464,42 @@ function WorkspaceApp({
     window.addEventListener('keydown', onKey); return () => window.removeEventListener('keydown', onKey);
   }, [modal]);
 
-  const update = <K extends keyof WorkspaceData,>(key: K, updater: (current: WorkspaceData[K]) => WorkspaceData[K]) => {
-    setData(prev => ({ ...prev, [key]: updater(prev[key]), updatedAt: new Date().toISOString() }));
+  const update = <K extends keyof WorkspaceData,>(key: K, updater: (current: WorkspaceData[K]) => WorkspaceData[K]): Promise<void> => {
+    setSavingCount(value => value + 1);
+    const operation = mutationQueueRef.current.then(async () => {
+      if (!dataReady) throw new Error('Workspace data has not finished loading.');
+      const current = dataRef.current;
+      const nextValue = updater(current[key]);
+      if (BUSINESS_DATA_RESOURCES.some(item => item.key === key)) {
+        await persistBusinessCollectionChanges(
+          workspace.id,
+          key as BusinessDataKey,
+          current[key] as WorkspaceData[BusinessDataKey],
+          nextValue as WorkspaceData[BusinessDataKey]
+        );
+      }
+      const nextData = { ...current, [key]: nextValue, updatedAt: new Date().toISOString() } as WorkspaceData;
+      dataRef.current = nextData;
+      setData(nextData);
+    });
+    mutationQueueRef.current = operation.catch(() => undefined);
+    return operation.finally(() => setSavingCount(value => Math.max(0, value - 1)));
   };
+
+  const replaceAllData = (nextData: WorkspaceData): Promise<void> => {
+    setSavingCount(value => value + 1);
+    const operation = mutationQueueRef.current.then(async () => {
+      if (!dataReady) throw new Error('Workspace data has not finished loading.');
+      const current = dataRef.current;
+      await replaceBusinessCollections(workspace.id, current, nextData);
+      const next = { ...nextData, updatedAt: new Date().toISOString() };
+      dataRef.current = next;
+      setData(next);
+    });
+    mutationQueueRef.current = operation.catch(() => undefined);
+    return operation.finally(() => setSavingCount(value => Math.max(0, value - 1)));
+  };
+
   const notify = (message: string) => setToast(message);
   const navigate = (target: PageId) => {
     if (target === 'access' && !isOwner) { notify('Access Management hanya tersedia untuk Owner.'); return; }
