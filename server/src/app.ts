@@ -12,6 +12,7 @@ import { registerAuthRoutes } from './routes/auth.js';
 import { registerWorkspaceAccessRoutes } from './routes/workspace-access.js';
 import { registerIntegrationRoutes } from './routes/integrations.js';
 import { registerSyncJobRoutes } from './routes/sync-jobs.js';
+import { registerBusinessDataRoutes } from './routes/business-data.js';
 import { AppError } from './errors.js';
 
 export async function buildApp(config: AppConfig, pool: Pool): Promise<FastifyInstance> {
@@ -54,6 +55,7 @@ export async function buildApp(config: AppConfig, pool: Pool): Promise<FastifyIn
   await registerWorkspaceAccessRoutes(app, pool, authenticate);
   await registerIntegrationRoutes(app, pool, authenticate);
   await registerSyncJobRoutes(app, pool, authenticate);
+  await registerBusinessDataRoutes(app, pool, authenticate);
 
   app.addHook('onClose', async () => {
     await pool.end();
