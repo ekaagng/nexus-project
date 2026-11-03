@@ -280,6 +280,9 @@ async function createSession(
       ]
     );
     const session = inserted.rows[0];
+    if (!session) {
+      throw new Error('Session insert completed without returning a session row.');
+    }
     await client.query(
       "INSERT INTO public.auth_security_events (user_id, session_id, event_type) VALUES ($1, $2::uuid, 'login.succeeded')",
       [user.userId, session.id]
