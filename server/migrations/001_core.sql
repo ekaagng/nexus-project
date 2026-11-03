@@ -322,6 +322,7 @@ CREATE INDEX audit_logs_workspace_time_idx ON audit_logs(workspace_id, created_a
 -- before applying this migration; run migrations as nexus_migrator.
 GRANT USAGE ON SCHEMA public TO nexus_app;
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO nexus_app;
+REVOKE ALL ON TABLE public.nexus_schema_migrations FROM nexus_app;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public
   GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO nexus_app;
 
