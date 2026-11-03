@@ -172,7 +172,7 @@ class AuthTestPool {
     }
 
     if (normalized.startsWith('insert into public.auth_security_events')) {
-      const typeMatch = normalized.match(/'((?:login|logout|session|sessions)\.[a-z.]+)'/);
+      const typeMatch = normalized.match(/'((?:login|logout|session|sessions)(?:\.[a-z.]+)?)'/);
       this.securityEvents.push({
         userId: String(values[0] ?? ''),
         sessionId: typeof values[1] === 'string' && values[1].includes('-') ? values[1] : undefined,
