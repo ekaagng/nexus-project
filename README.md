@@ -3,7 +3,7 @@
 **Baseline:** PRD NEXUS v0.3 · Nocturne / Midnight Observatory  
 **Current implementation:** React/Vite demo frontend + PostgreSQL/Fastify backend foundations.
 
-The frontend still runs as a local demo by default. Backend foundations add a workspace-scoped API, OIDC token verification and Authorization Code + PKCE login, PostgreSQL-backed opaque browser sessions, PostgreSQL tenant isolation, encrypted-secret storage primitives, normalized integration contracts, sync-job metadata and Owner-managed workspace access. Provider APIs are not connected. Browser login/session endpoints are implemented in the backend but require a configured OIDC provider; the frontend is not wired to them yet.
+The frontend now gates the app on a server-verified OIDC browser session, loads workspace membership from the API, and connects account/session controls plus Owner-only Access Management. Campaign, brief, task, content, Ads, sales, KOL and budget records remain local demo data; they are isolated by workspace ID in browser storage and are not shared server records. Provider APIs are not connected.
 
 ## Frontend already implemented
 
@@ -32,6 +32,7 @@ The `feat/authentication-management` child branch adds:
 - Provider-neutral OIDC Authorization Code + PKCE login flow with state and nonce validation.
 - Opaque browser sessions stored as SHA-256 hashes, fixed expiry, per-request revalidation, logout and per-session/revoke-all controls.
 - HttpOnly/SameSite cookies, production Secure-cookie enforcement, exact-Origin CSRF validation and credentialed CORS limited to configured origins.
+- React session gate, workspace selection/onboarding, invite acceptance, account session list/revocation/logout and Owner-only Access Management UI.
 - One-time 256-bit invitation tokens; only SHA-256 token hashes are stored.
 - Seven-day invitation expiry and a database-reserved seat for every pending invite.
 - Verified-email matching during invitation acceptance.
@@ -81,7 +82,7 @@ No Meta Ads, Scalev, Lynk.id, Instagram, TikTok or YouTube provider adapter is r
    - `http://localhost:8787/health/live`
    - `http://localhost:8787/health/ready`
 
-The existing frontend uses localStorage key `nexus.workspace.v03`; it is not yet wired to `/api/v1/auth/session`, the login callback, or workspace APIs. Browser login requires the OIDC client settings and `APP_ENCRYPTION_KEY`; do not enable fake local authentication.
+Frontend API calls use `VITE_API_BASE_URL` (standard local value: `http://localhost:8787`) with credentialed requests; configure the API `CORS_ORIGINS` to include the frontend origin. Browser login requires OIDC client settings and `APP_ENCRYPTION_KEY`. The service worker never caches `/api/*` responses. Business-domain data is still browser-local and must not be treated as shared workspace data.
 
 ## Database security requirement
 
