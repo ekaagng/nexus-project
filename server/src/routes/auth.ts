@@ -200,11 +200,23 @@ async function verifyIdentityToken(
     });
     const nonce = verified.payload.nonce;
     const subject = verified.payload.sub;
+    const issuedAt = verified.payload.iat;
+    const audiences = Array.isArray(verified.payload.aud)
+      ? verified.payload.aud
+      : [verified.payload.aud];
+    const authorizedParty = verified.payload.azp;
+    const issuedAtIsValid = typeof issuedAt === 'number' && issuedAt <= Math.floor(Date.now() / 1000) + 60;
+    const authorizedPartyIsValid = audiences.length <= 1
+      ? authorizedParty === undefined || authorizedParty === config.oidcClientId
+      : authorizedParty === config.oidcClientId;
+
     if (
       typeof nonce !== 'string' ||
       !secureEqual(sha256(nonce), expectedNonceHash) ||
       typeof subject !== 'string' ||
-      subject.trim() === ''
+      subject.trim() === '' ||
+      !issuedAtIsValid ||
+      !authorizedPartyIsValid
     ) {
       throw new AppError(401, 'oidc_identity_invalid', 'The identity token failed sign-in validation.');
     }
