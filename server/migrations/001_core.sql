@@ -138,6 +138,7 @@ CREATE TABLE sync_jobs (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   CHECK (period_start < period_end),
   UNIQUE (workspace_id, idempotency_key),
+  UNIQUE (workspace_id, id),
   FOREIGN KEY (workspace_id, connection_id)
     REFERENCES integration_connections(workspace_id, id) ON DELETE CASCADE
 );
@@ -183,7 +184,9 @@ CREATE TABLE orders (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (workspace_id, provider, external_order_id),
   FOREIGN KEY (workspace_id, connection_id)
-    REFERENCES integration_connections(workspace_id, id) ON DELETE SET NULL (connection_id)
+    REFERENCES integration_connections(workspace_id, id) ON DELETE SET NULL (connection_id),
+  FOREIGN KEY (workspace_id, import_job_id)
+    REFERENCES sync_jobs(workspace_id, id) ON DELETE SET NULL (import_job_id)
 );
 CREATE INDEX orders_workspace_date_idx ON orders(workspace_id, placed_at DESC);
 CREATE INDEX orders_workspace_campaign_idx ON orders(workspace_id, internal_campaign_id);
@@ -284,7 +287,7 @@ CREATE TABLE source_lineage (
   entity_id UUID NOT NULL,
   source_record_id TEXT NOT NULL,
   payload_hash TEXT NOT NULL,
-  import_job_id UUID REFERENCES sync_jobs(id) ON DELETE SET NULL,
+  import_job_id UUID,
   timezone TEXT NOT NULL DEFAULT 'Asia/Jakarta',
   currency CHAR(3) NOT NULL DEFAULT 'IDR',
   validation_state TEXT NOT NULL CHECK (validation_state IN ('valid', 'incomplete', 'rejected', 'unverified')),
@@ -340,6 +343,55 @@ CREATE POLICY workspaces_insert_self ON workspaces
 CREATE POLICY workspaces_update_admin ON workspaces
   FOR UPDATE USING (nexus_private.workspace_role(NULLIF(current_setting('nexus.user_id', TRUE), ''), id) IN ('owner', 'admin'))
   WITH CHECK (nexus_private.workspace_role(NULLIF(current_setting('nexus.user_id', TRUE), ''), id) IN ('owner', 'admin'));
+
+
+CREATE UNIQUE INDEX workspace_members_one_active_owner_idx
+  ON workspace_members(workspace_id)
+  WHERE role = 'owner' AND status = 'active';
+
+CREATE OR REPLACE FUNCTION nexus_private.enforce_workspace_member_limit()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $
+DECLARE
+  active_count INTEGER;
+BEGIN
+  IF TG_OP = 'UPDATE' THEN
+    IF NEW.workspace_id <> OLD.workspace_id THEN
+      RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'workspace_membership_workspace_is_immutable';
+    END IF;
+    IF OLD.status = 'active' AND NEW.status = 'active' THEN
+      RETURN NEW;
+    END IF;
+  END IF;
+
+  IF NEW.status = 'active' THEN
+    PERFORM 1
+    FROM public.workspaces
+    WHERE id = NEW.workspace_id
+    FOR UPDATE;
+
+    SELECT COUNT(*) INTO active_count
+    FROM public.workspace_members
+    WHERE workspace_id = NEW.workspace_id AND status = 'active';
+
+    IF active_count >= 5 THEN
+      RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'workspace_active_member_limit_exceeded';
+    END IF;
+  END IF;
+
+  RETURN NEW;
+END;
+$;
+
+REVOKE ALL ON FUNCTION nexus_private.enforce_workspace_member_limit() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION nexus_private.enforce_workspace_member_limit() TO nexus_app;
+
+CREATE TRIGGER workspace_members_limit_active
+  BEFORE INSERT OR UPDATE OF workspace_id, status ON public.workspace_members
+  FOR EACH ROW EXECUTE FUNCTION nexus_private.enforce_workspace_member_limit();
 
 CREATE POLICY workspace_members_select_scope ON workspace_members
   FOR SELECT USING (
