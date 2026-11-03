@@ -132,14 +132,14 @@ Configure these values on the API server only. Never put the client secret or en
 | `SESSION_COOKIE_SECURE` | Must be `true` in production |
 | `APP_ENCRYPTION_KEY` | Base64-encoded 32-byte key used to encrypt PKCE transaction secrets |
 
-For local development, configure the identity provider callback as `http://localhost:8787/api/v1/auth/oidc/callback`, frontend origin as `http://localhost:5173`, and keep `SESSION_COOKIE_SECURE=false`. For production, all public endpoints and the frontend must use HTTPS.
+For local development, configure the identity provider callback as `http://localhost:8787/api/v1/auth/oidc/callback`, frontend origin as `http://localhost:5173`, and keep `SESSION_COOKIE_SECURE=false`. For production, all public endpoints and the frontend must use HTTPS. `SameSite=Lax` means the browser frontend and API should share the same registrable site; unrelated frontend/API domains require an explicit cookie deployment decision.
 
 ## Explicitly not included
 
-- Login page, OIDC authorization-code/PKCE callback, or a selected production identity provider.
-- Opaque browser sessions, refresh/rotation, logout-all, CSRF/session revocation controls.
-- Email delivery, invitation deep-link UI, or resend-email integration.
-- Frontend Access Management screen wiring; the current frontend remains localStorage-backed.
+- React login screen and wiring of the existing frontend to `/api/v1/auth/session`, workspace APIs, and Access Management endpoints; the current frontend remains localStorage-backed.
+- Selection/registration of a production identity provider, provider-specific consent configuration, and global IdP logout.
+- Automatic browser-session renewal/rotation and account deactivation/suspension.
+- Email delivery, invitation deep-link UI, and resend-email integration.
 - Granular per-feature Member permissions.
 
 Do not treat this branch as a complete production authentication release. Configure and review the identity provider, exact callback URL, verified-email claim behavior, deployment secrets, frontend integration, email delivery and operational monitoring before inviting real team members.
