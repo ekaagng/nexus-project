@@ -610,7 +610,19 @@ function App() {
   </>;
 
   const renderCampaignDetail = () => {
-    if (!campaign) return <Empty title="Campaign tidak ditemukan" body="Campaign mungkin sudah dihapus dari data lokal." action={<button className="btn btn-secondary" onClick={()=>navigate('campaigns')}>Back to campaigns</button}/>;
+    if (!campaign) {
+      return (
+        <Empty
+          title="Campaign tidak ditemukan"
+          body="Campaign mungkin sudah dihapus dari data lokal."
+          action={
+            <button className="btn btn-secondary" onClick={() => navigate('campaigns')}>
+              Back to campaigns
+            </button>
+          }
+        />
+      );
+    }
     const linkedTasks = data.tasks.filter(t=>t.campaignId===campaign.id);
     const linkedContents = data.contents.filter(c=>c.campaignId===campaign.id);
     const linkedKols = data.kols.filter(k=>k.campaignId===campaign.id);
