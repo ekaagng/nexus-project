@@ -40,7 +40,7 @@ No Meta Ads, Scalev, Lynk.id, Instagram, TikTok or YouTube provider adapter is r
    npm install
    ```
 
-2. Copy `.env.example` to `.env` and configure `DATABASE_URL`. Use a separate schema-owner URL in `MIGRATION_DATABASE_URL` for local migrations if available.
+2. Copy `.env.example` to `.env` and configure `DATABASE_URL`. Set `MIGRATION_DATABASE_URL` to a dedicated schema-owner connection; migrations will refuse to run without it.
 
 3. Create the PostgreSQL database and roles, then apply the migration:
 
