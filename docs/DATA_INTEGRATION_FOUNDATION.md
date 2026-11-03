@@ -87,7 +87,17 @@ The existing frontend remains on Vite port 5173. Its demo data is still localSto
 
 ## 6. Database role and RLS requirement
 
-Run migrations with a database role that owns the schema and tables. The API's `DATABASE_URL` must use a separate runtime role that does **not** own the tables and does not have `BYPASSRLS`. PostgreSQL table owners bypass RLS unless forced, so running the API as the migration owner would invalidate the isolation boundary.
+Create separate roles before migrating (replace passwords with strong values):
+
+```sql
+CREATE ROLE nexus_migrator LOGIN PASSWORD 'replace-this-migration-password';
+CREATE ROLE nexus_app LOGIN PASSWORD 'replace-this-runtime-password';
+GRANT CONNECT ON DATABASE nexus TO nexus_migrator, nexus_app;
+GRANT CREATE ON SCHEMA public TO nexus_migrator;
+GRANT USAGE ON SCHEMA public TO nexus_app;
+```
+
+Run migrations using `MIGRATION_DATABASE_URL` as `nexus_migrator`. The migration grants the minimum table DML privileges and helper-function execution to `nexus_app`. The API's `DATABASE_URL` must use `nexus_app`, which must **not** own tables and must not have `BYPASSRLS`. PostgreSQL table owners bypass RLS unless forced, so running the API as the migration owner would invalidate the isolation boundary.
 
 The API sets transaction-local `nexus.user_id` and `nexus.workspace_id` values. Never replace these with session-level settings on pooled connections.
 
