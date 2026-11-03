@@ -1,9 +1,9 @@
 # NEXUS — Marketing Intelligence & Operations PWA
 
 **Baseline:** PRD NEXUS v0.3 · Nocturne / Midnight Observatory  
-**Current implementation:** React/Vite demo frontend + backend data-integration foundation.
+**Current implementation:** React/Vite demo frontend + PostgreSQL/Fastify backend foundations.
 
-The frontend still runs as a local demo by default. The backend foundation adds a PostgreSQL schema, workspace-scoped API, OIDC token verification boundary, encrypted-secret utility, normalized integration data contracts and persistent sync-job metadata. It does not mean provider APIs are connected.
+The frontend still runs as a local demo by default. Backend foundations add a workspace-scoped API, OIDC token verification, PostgreSQL tenant isolation, encrypted-secret storage primitives, normalized integration contracts, sync-job metadata and Owner-managed workspace access. Provider APIs and production browser sessions are not connected.
 
 ## Frontend already implemented
 
@@ -14,7 +14,7 @@ The frontend still runs as a local demo by default. The backend foundation adds 
 - PWA manifest, service worker shell and offline behavior.
 - Asia/Jakarta date helpers.
 
-## Backend foundation added
+## Backend foundation
 
 - Fastify API on port 8787, separate from Vite's port 5173.
 - PostgreSQL tables for workspaces, memberships, integration connections/secrets, sync jobs/cursors, orders, daily Ads metrics, social metrics, content snapshots, source lineage and audit logs.
@@ -24,7 +24,20 @@ The frontend still runs as a local demo by default. The backend foundation adds 
 - Server-only provider connector registry and normalized order upsert boundary.
 - Health, workspace, integration metadata and sync-job API routes.
 
-No Meta Ads, Scalev, Lynk.id, Instagram, TikTok or YouTube provider adapter is registered yet. OAuth callbacks, token refresh, background worker execution and live dashboard reads remain separate implementation stages.
+## Workspace access management
+
+The `feat/authentication-management` child branch adds:
+
+- Owner-only member and invitation management endpoints.
+- One-time 256-bit invitation tokens; only SHA-256 token hashes are stored.
+- Seven-day invitation expiry and a database-reserved seat for every pending invite.
+- Verified-email matching during invitation acceptance.
+- Member/invitation revocation and audit events.
+- Database enforcement of the five-seat limit and immutable initial Owner.
+
+See [Workspace Access Management](docs/WORKSPACE_ACCESS_MANAGEMENT.md) for API contracts and security behavior.
+
+No Meta Ads, Scalev, Lynk.id, Instagram, TikTok or YouTube provider adapter is registered yet. Provider OAuth callbacks, token refresh, background worker execution and live dashboard reads remain separate implementation stages.
 
 ## Requirements
 
@@ -42,7 +55,7 @@ No Meta Ads, Scalev, Lynk.id, Instagram, TikTok or YouTube provider adapter is r
 
 2. Copy `.env.example` to `.env`. Set `DATABASE_URL` to the restricted `nexus_app` connection and `MIGRATION_DATABASE_URL` to the dedicated schema-owner connection; migrations will refuse to run without it.
 
-3. Create the PostgreSQL database and roles, then apply the migration:
+3. Create the PostgreSQL database and roles, then apply migrations:
 
    ```bash
    npm run db:migrate
@@ -86,8 +99,9 @@ npm run test:server
 ## Documentation
 
 - [Data Integration Foundation](docs/DATA_INTEGRATION_FOUNDATION.md)
+- [Workspace Access Management](docs/WORKSPACE_ACCESS_MANAGEMENT.md)
 - [Production Gaps](docs/PRODUCTION_GAPS.md)
 
 ## Explicit production gaps
 
-This is not yet a live multi-user or provider-connected release. Identity-provider deployment configuration, workspace invite/allowlist workflows, official provider OAuth/API adapters, token refresh, queue worker and retry scheduler, connector-specific normalization, live dashboard queries, deployment secrets management, operational monitoring and security testing remain before production use.
+This is not yet a live multi-user or provider-connected release. The production identity-provider login flow and server-owned browser session lifecycle are not implemented. Invitation delivery is manual and the frontend Access Management UI is not connected to the new API. Official provider OAuth/API adapters, token refresh, queue worker and retry scheduler, connector-specific normalization, live dashboard queries, deployment secrets management, operational monitoring and security testing remain before production use.
