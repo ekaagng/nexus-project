@@ -286,7 +286,7 @@ export async function registerAuthRoutes(
   config: AppConfig,
   authenticate: preHandlerHookHandler
 ): Promise<void> {
-  app.get('/api/v1/auth/oidc/start', async (_request, reply) => {
+  app.get('/api/v1/auth/oidc/start', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (_request, reply) => {
     const settings = requireLoginConfig(config);
     const discovery = await loadDiscovery(settings.issuer);
     const state = randomBytes(32).toString('base64url');
@@ -323,7 +323,7 @@ export async function registerAuthRoutes(
     return reply.redirect(authorizationUrl.toString());
   });
 
-  app.get('/api/v1/auth/oidc/callback', async (request, reply) => {
+  app.get('/api/v1/auth/oidc/callback', { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (request, reply) => {
     try {
       const parsed = callbackQuerySchema.safeParse(request.query);
       if (!parsed.success || !parsed.data.state) {
