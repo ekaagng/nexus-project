@@ -171,11 +171,49 @@ export async function replaceBusinessCollections(
   before: WorkspaceData,
   after: WorkspaceData
 ): Promise<void> {
-  // Delete dependants before their parent; then create/update parents before dependants.
-  for (const { key } of [...BUSINESS_DATA_RESOURCES].reverse()) {
-    await persistBusinessCollectionChanges(workspaceId, key, before[key], after[key]);
-  }
+  const previousByKey = new Map<BusinessDataKey, Map<string, Record<string, unknown>>>();
+  const nextByKey = new Map<BusinessDataKey, Map<string, Record<string, unknown>>>();
+
   for (const { key } of BUSINESS_DATA_RESOURCES) {
-    await persistBusinessCollectionChanges(workspaceId, key, [], after[key]);
+    previousByKey.set(key, new Map((before[key] as Array<Record<string, unknown>>).map(item => [String(item.id), item])));
+    nextByKey.set(key, new Map((after[key] as Array<Record<string, unknown>>).map(item => [String(item.id), item])));
+  }
+
+  // Remove child records before parent records to respect foreign-key relationships.
+  for (const { key, resource } of [...BUSINESS_DATA_RESOURCES].reverse()) {
+    const previous = previousByKey.get(key)!;
+    const next = nextByKey.get(key)!;
+    for (const id of previous.keys()) {
+      if (!next.has(id)) {
+        await apiRequest(
+          `${resourcePath(resource)}/${encodeURIComponent(id)}`,
+          { method: 'DELETE', headers: workspaceHeaders(workspaceId) }
+        );
+      }
+    }
+  }
+
+  // Create and update parent records before their dependants.
+  for (const { key, resource } of BUSINESS_DATA_RESOURCES) {
+    const previous = previousByKey.get(key)!;
+    const next = nextByKey.get(key)!;
+    for (const [id, item] of next) {
+      const oldItem = previous.get(id);
+      if (!oldItem) {
+        await createRecord(workspaceId, key, item);
+        continue;
+      }
+      const patch = changedBusinessRecordFields(key, oldItem, item);
+      if (Object.keys(patch).length > 0) {
+        await apiRequest(
+          `${resourcePath(resource)}/${encodeURIComponent(id)}`,
+          {
+            method: 'PATCH',
+            headers: workspaceHeaders(workspaceId),
+            body: patch
+          }
+        );
+      }
+    }
   }
 }
