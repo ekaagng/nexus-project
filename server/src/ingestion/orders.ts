@@ -1,9 +1,8 @@
 import { z } from 'zod';
 import type { PoolClient } from 'pg';
-import type { ProviderId } from '../connectors/types.js';
 
 const normalizedOrderSchema = z.object({
-  provider: z.enum(['meta_ads', 'scalev', 'lynk_id', 'instagram', 'tiktok', 'youtube', 'manual']),
+  provider: z.enum(['scalev', 'lynk_id', 'manual']),
   externalOrderId: z.string().min(1).max(240),
   placedAt: z.string().datetime({ offset: true }),
   status: z.enum(['pending', 'paid', 'partially_refunded', 'refunded', 'cancelled', 'failed']),
@@ -29,12 +28,13 @@ export async function upsertNormalizedOrders(
   client: PoolClient,
   workspaceId: string,
   connectionId: string,
-  records: NormalizedOrder[]
+  records: NormalizedOrder[],
+  syncJobId?: string
 ): Promise<{ processed: number }> {
   let processed = 0;
   for (const input of records) {
     const record = normalizedOrderSchema.parse(input);
-    await client.query(
+    const saved = await client.query<{ id: string }>(
       `INSERT INTO orders (
         workspace_id, connection_id, provider, external_order_id, placed_at, status,
         currency, gross_amount, discount_amount, refund_amount, net_amount,
@@ -65,8 +65,8 @@ export async function upsertNormalizedOrders(
         synced_at = NOW(),
         updated_at = NOW()
       WHERE orders.source_updated_at IS NULL
-        OR EXCLUDED.source_updated_at IS NULL
-        OR EXCLUDED.source_updated_at >= orders.source_updated_at`,
+        OR (EXCLUDED.source_updated_at IS NOT NULL AND EXCLUDED.source_updated_at >= orders.source_updated_at)
+      RETURNING id`,
       [
         workspaceId, connectionId, record.provider, record.externalOrderId, record.placedAt, record.status,
         record.currency, record.grossAmount, record.discountAmount, record.refundAmount, record.netAmount,
@@ -75,6 +75,24 @@ export async function upsertNormalizedOrders(
         record.internalCampaignId ?? null, record.payloadHash, record.sourceUpdatedAt ?? null
       ]
     );
+
+    const orderId = saved.rows[0]?.id;
+    if (orderId) {
+      await client.query(
+        `INSERT INTO source_lineage (
+          workspace_id, connection_id, provider, entity_type, entity_id,
+          source_record_id, payload_hash, import_job_id, validation_state
+        ) VALUES ($1::uuid, $2::uuid, $3, 'order', $4::uuid, $5, $6, $7::uuid, 'valid')
+        ON CONFLICT (workspace_id, provider, connection_id, source_record_id)
+        DO UPDATE SET entity_id = EXCLUDED.entity_id,
+                      payload_hash = EXCLUDED.payload_hash,
+                      import_job_id = EXCLUDED.import_job_id,
+                      validation_state = EXCLUDED.validation_state,
+                      imported_at = NOW(),
+                      synced_at = NOW()`,
+        [workspaceId, connectionId, record.provider, orderId, record.externalOrderId, record.payloadHash, syncJobId ?? null]
+      );
+    }
     processed += 1;
   }
   return { processed };
