@@ -125,9 +125,9 @@ export const demoData: WorkspaceData = {
 };
 
 export const STORAGE_KEY = 'nexus.workspace.v03';
-export function loadWorkspace(): WorkspaceData {
+export function loadWorkspace(storageKey: string = STORAGE_KEY): WorkspaceData {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(storageKey);
     if (!raw) return demoData;
     const parsed = JSON.parse(raw) as WorkspaceData;
     if (!parsed || !Array.isArray(parsed.campaigns) || !Array.isArray(parsed.tasks)) return demoData;
