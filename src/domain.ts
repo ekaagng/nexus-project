@@ -42,6 +42,24 @@ export type WorkspaceData = {
   updatedAt: string;
 };
 
+export function createEmptyWorkspaceData(): WorkspaceData {
+  return {
+    campaigns: [],
+    tasks: [],
+    contents: [],
+    expenses: [],
+    kols: [],
+    orders: [],
+    ads: [],
+    briefs: [],
+    experiments: [],
+    competitors: [],
+    competitorPosts: [],
+    notifications: [],
+    updatedAt: new Date().toISOString()
+  };
+}
+
 /** Calendar date key fixed to the PRD workspace timezone (Asia/Jakarta). */
 export function jakartaDateKey(value: Date = new Date()): string {
   const parts = new Intl.DateTimeFormat('en-CA', {
