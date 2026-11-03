@@ -87,7 +87,7 @@ test('legacy workspace parsing preserves browser-only data while filling absent 
 });
 
 test('malformed legacy snapshots are rejected without destructive fallback', () => {
-  assert.throws(() => parseLegacyWorkspace('{not-json'), /not JSON/);
+  assert.throws(() => parseLegacyWorkspace('{not-json'), /JSON yang valid/);
   assert.throws(() => parseLegacyWorkspace(JSON.stringify({ tasks: {} })), /tasks.*not valid/);
 });
 
