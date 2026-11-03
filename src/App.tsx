@@ -501,6 +501,36 @@ function WorkspaceApp({
   };
 
   const notify = (message: string) => setToast(message);
+
+  if (!dataReady) {
+    return (
+      <main className="auth-screen">
+        <section className="auth-frame" aria-live="polite">
+          <div className="auth-brand">
+            <span className="brand-mark">N</span>
+            <span><strong>NEXUS</strong><small>MARKETING INTELLIGENCE</small></span>
+          </div>
+          <div className="auth-copy">
+            <span className="eyebrow">{dataError ? 'DATA MIGRATION ERROR' : 'WORKSPACE DATA'}</span>
+            <h1>{dataError ? 'Workspace data needs attention' : 'Preparing your workspace'}</h1>
+            <p>{dataError || dataStatus}</p>
+          </div>
+          {dataError ? (
+            <div className="auth-actions">
+              <button className="btn btn-primary btn-block" onClick={() => setRetryVersion(value => value + 1)}>
+                Retry data migration
+              </button>
+              <p className="auth-inline-error">Data lama tidak dihapus. Snapshot browser asli tetap dipertahankan sampai proses migrasi selesai.</p>
+            </div>
+          ) : (
+            <div className="auth-progress" role="status"><span /> {dataStatus}</div>
+          )}
+          <p className="auth-footnote">Workspace records · PostgreSQL · Browser backup preserved</p>
+        </section>
+      </main>
+    );
+  }
+
   const navigate = (target: PageId) => {
     if (target === 'access' && !isOwner) { notify('Access Management hanya tersedia untuk Owner.'); return; }
     setPage(target); setDrawerOpen(false); setAiOpen(false); setNotificationsOpen(false); setGlobalSearch('');
@@ -978,7 +1008,7 @@ function WorkspaceApp({
   return <div className="app-shell">
     <aside className="sidebar desktop-sidebar">{renderSidebar()}</aside>
     {drawerOpen&&<><button className="drawer-scrim" aria-label="Close navigation" onClick={()=>setDrawerOpen(false)}/><aside className="sidebar mobile-sidebar">{renderSidebar(true)}</aside></>}
-    <main className="main-shell">{renderHeader()}<div className="demo-banner"><span className="demo-dot"/><strong>AUTHENTICATED SESSION</strong><span>Records remain browser-local · provider integrations inactive</span><span className="connection-label">{online?'ONLINE':'OFFLINE'}</span></div><div className="page-content"><div className="page-heading">{page!=='overview'&&<><div className="page-heading-copy"><span className="eyebrow">{pageMeta.phase}</span><h1>{pageMeta.title}</h1><p>{pageMeta.subtitle}</p></div>{page==='campaign-detail'&&null}</>}</div>{renderPage()}<footer className="app-footer"><span>NEXUS v0.3 · Nocturne interface</span><span>Updated locally · {new Date(data.updatedAt).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'})} WIB</span></footer></div></main>
+    <main className="main-shell">{renderHeader()}<div className="demo-banner"><span className="demo-dot"/><strong>AUTHENTICATED SESSION</strong><span>Business records: PostgreSQL · Orders & Ads: browser-local</span><span className="connection-label">{savingCount>0?'SAVING':online?'SYNCED':'OFFLINE'}</span></div><div className="page-content"><div className="page-heading">{page!=='overview'&&<><div className="page-heading-copy"><span className="eyebrow">{pageMeta.phase}</span><h1>{pageMeta.title}</h1><p>{pageMeta.subtitle}</p></div>{page==='campaign-detail'&&null}</>}</div>{renderPage()}<footer className="app-footer"><span>NEXUS v0.4 · Nocturne interface</span><span>{dataStatus} · {new Date(data.updatedAt).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'})} WIB</span></footer></div></main>
     <nav className="mobile-bottom-nav" aria-label="Mobile navigation">{[{id:'overview' as PageId,label:'Home',icon:'grid'},{id:'campaigns' as PageId,label:'Plan',icon:'layers'},{id:'tasks' as PageId,label:'Tasks',icon:'check-square'},{id:'analytics' as PageId,label:'Insights',icon:'activity'}].map(item=><button key={item.id} className={page===item.id?'active':''} onClick={()=>navigate(item.id)}><Icon name={item.icon} size={18}/><span>{item.label}</span></button>)}</nav>
     <button className="ai-launcher" onClick={()=>setAiOpen(true)} aria-label="Open NEXUS AI assistant"><span><Icon name="sparkles" size={19}/></span><b>Ask NEXUS</b></button>
     {aiOpen&&<><button className="ai-scrim" aria-label="Close assistant" onClick={()=>setAiOpen(false)}/><aside className="ai-panel glass"><div className="ai-panel-head"><div className="ai-title"><span className="ai-orb"><Icon name="sparkles" size={19}/></span><div><strong>NEXUS Assistant</strong><small>{pageMeta.phase} · {activePage}</small></div></div><button className="icon-btn" onClick={()=>setAiOpen(false)} aria-label="Close assistant"><Icon name="close"/></button></div><div className="ai-context"><span className="eyebrow">CURRENT PAGE FOCUS</span><strong>{page==='overview'?'Revenue quality & operational priority':page==='campaigns'?'Campaign completeness & ownership':page==='tasks'?'Task bottlenecks & deadlines':page==='content'?'Hook, format & content pipeline':page==='budget'?'Budget pacing & commitment':'Data availability & decision quality'}</strong><p>Context: {activePage} · Period {dateRange} · {data.campaigns.length} campaign records</p></div><div className="ai-review-card"><Badge tone="warning">RULE-BASED DEMO</Badge><h3>{overdueTasks.length?`${overdueTasks.length} overdue tasks need attention`:'No critical task delay detected'}</h3><p>{overdueTasks.length?'Tinjau overdue task dan approval sebelum menambah beban campaign.':'Lanjutkan monitoring data freshness dan kelengkapan source.'}</p><div className="ai-evidence"><small>Evidence</small><span>{overdueTasks.map(t=>t.title).join(' · ')||'No overdue record in current local data.'}</span></div></div><div className="ai-review-card secondary"><h3>Ask about this page</h3><p>Assistant produksi akan menggunakan retrieval ke database NEXUS dan menyertakan source reference. Mode ini belum terhubung ke model AI.</p><div className="ai-suggestions"><button onClick={()=>{navigate('ai-lab');setAiOpen(false)}}>Evaluate data gaps <Icon name="arrow" size={12}/></button><button onClick={()=>{navigate('tasks');setAiOpen(false)}}>Review overdue tasks <Icon name="arrow" size={12}/></button></div></div><div className="ai-input-row"><input placeholder="AI provider belum dikonfigurasi" disabled/><button disabled aria-label="Send message"><Icon name="arrow"/></button></div><small className="ai-disclaimer">AI hanya memberi rekomendasi. Aksi operasional tetap memerlukan persetujuan pengguna.</small></aside></>}
