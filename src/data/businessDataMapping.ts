@@ -1,3 +1,4 @@
+import { createEmptyWorkspaceData } from '../domain.js';
 import type {
   AdMetric, Brief, Campaign, Competitor, CompetitorPost, ContentItem, Expense,
   Experiment, Kol, Order, Task, WorkspaceData
@@ -108,6 +109,9 @@ export function deserializeBusinessRecord<K extends BusinessDataKey>(
   value: Record<string, unknown>
 ): WorkspaceData[K][number] {
   const record = { ...value };
+  delete record.version;
+  delete record.createdAt;
+  delete record.systemUpdatedAt;
   const moneyFields: Partial<Record<BusinessDataKey, string[]>> = {
     campaigns: ['targetRevenue', 'plannedBudget'],
     expenses: ['amount'],
@@ -134,23 +138,6 @@ export function deserializeBusinessRecord<K extends BusinessDataKey>(
   return record as WorkspaceData[K][number];
 }
 
-export function createEmptyWorkspaceData(): WorkspaceData {
-  return {
-    campaigns: [],
-    tasks: [],
-    contents: [],
-    expenses: [],
-    kols: [],
-    orders: [],
-    ads: [],
-    briefs: [],
-    experiments: [],
-    competitors: [],
-    competitorPosts: [],
-    notifications: [],
-    updatedAt: new Date().toISOString()
-  };
-}
 
 export function localOnlyWorkspaceData(data: WorkspaceData): Pick<WorkspaceData, 'orders' | 'ads' | 'notifications' | 'updatedAt'> {
   return {
