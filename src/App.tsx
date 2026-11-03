@@ -316,7 +316,6 @@ function WorkspaceApp({
   const [aiOpen, setAiOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [modal, setModal] = useState<ModalKind>(null);
-  const [profileRole, setProfileRole] = useState<'Owner'|'Member'>('Owner');
   const [dateRange, setDateRange] = useState('7D');
   const [campaignFilter, setCampaignFilter] = useState('all');
   const [channelFilter, setChannelFilter] = useState('all');
@@ -339,8 +338,8 @@ function WorkspaceApp({
   const importInput = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...data, updatedAt: new Date().toISOString() }));
-  }, [data]);
+    localStorage.setItem(workspaceStorageKey, JSON.stringify({ ...data, updatedAt: new Date().toISOString() }));
+  }, [data, workspaceStorageKey]);
   useEffect(() => {
     const onOnline = () => setOnline(true);
     const onOffline = () => setOnline(false);
@@ -353,9 +352,6 @@ function WorkspaceApp({
     return () => window.clearTimeout(timer);
   }, [toast]);
   useEffect(() => {
-    if (profileRole === 'Member' && page === 'access') setPage('overview');
-  }, [profileRole, page]);
-  useEffect(() => {
     const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') { setDrawerOpen(false); setAiOpen(false); setNotificationsOpen(false); if (modal) setModal(null); } };
     window.addEventListener('keydown', onKey); return () => window.removeEventListener('keydown', onKey);
   }, [modal]);
@@ -365,7 +361,7 @@ function WorkspaceApp({
   };
   const notify = (message: string) => setToast(message);
   const navigate = (target: PageId) => {
-    if (target === 'access' && profileRole !== 'Owner') { notify('Access Management hanya tersedia untuk Owner.'); return; }
+    if (target === 'access' && !isOwner) { notify('Access Management hanya tersedia untuk Owner.'); return; }
     setPage(target); setDrawerOpen(false); setAiOpen(false); setNotificationsOpen(false); setGlobalSearch('');
   };
   const campaign = selectedCampaign ? data.campaigns.find(c => c.id === selectedCampaign) : undefined;
