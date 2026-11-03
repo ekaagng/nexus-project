@@ -41,7 +41,7 @@ export async function withWorkspaceContext<T>(
   return withUserContext(pool, userId, async (client) => {
     await client.query("SELECT set_config('nexus.workspace_id', $1, TRUE)", [workspaceId]);
     const access = await client.query<{ role: string | null }>(
-      'SELECT nexus_workspace_role($1, $2::uuid) AS role',
+      'SELECT nexus_private.workspace_role($1, $2::uuid) AS role',
       [userId, workspaceId]
     );
     const role = access.rows[0]?.role;
