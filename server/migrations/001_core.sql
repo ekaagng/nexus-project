@@ -18,6 +18,7 @@ CREATE TABLE workspace_members (
   user_id TEXT NOT NULL,
   role TEXT NOT NULL CHECK (role IN ('owner', 'admin', 'member', 'viewer')),
   status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('invited', 'active', 'revoked')),
+  CHECK (role <> 'owner' OR status = 'active'),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   PRIMARY KEY (workspace_id, user_id)
@@ -354,43 +355,65 @@ RETURNS TRIGGER
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = ''
-AS $
+AS $$
 DECLARE
-  active_count INTEGER;
+  reserved_seats INTEGER;
+  workspace_owner TEXT;
 BEGIN
+  IF TG_OP = 'DELETE' THEN
+    IF OLD.role = 'owner' AND OLD.status = 'active' THEN
+      RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'workspace_initial_owner_is_immutable';
+    END IF;
+    RETURN OLD;
+  END IF;
+
   IF TG_OP = 'UPDATE' THEN
     IF NEW.workspace_id <> OLD.workspace_id THEN
       RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'workspace_membership_workspace_is_immutable';
     END IF;
-    IF OLD.status = 'active' AND NEW.status = 'active' THEN
+    IF OLD.role = 'owner' AND OLD.status = 'active'
+       AND (NEW.role <> 'owner' OR NEW.status <> 'active') THEN
+      RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'workspace_initial_owner_is_immutable';
+    END IF;
+    IF OLD.status IN ('invited', 'active') AND NEW.status IN ('invited', 'active') THEN
       RETURN NEW;
     END IF;
   END IF;
 
-  IF NEW.status = 'active' THEN
+  IF NEW.role = 'owner' THEN
+    SELECT created_by INTO workspace_owner
+    FROM public.workspaces
+    WHERE id = NEW.workspace_id;
+    IF NEW.user_id <> workspace_owner OR NEW.status <> 'active' THEN
+      RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'only_workspace_creator_can_be_owner';
+    END IF;
+  END IF;
+
+  IF NEW.status IN ('invited', 'active') THEN
     PERFORM 1
     FROM public.workspaces
     WHERE id = NEW.workspace_id
     FOR UPDATE;
 
-    SELECT COUNT(*) INTO active_count
+    SELECT COUNT(*) INTO reserved_seats
     FROM public.workspace_members
-    WHERE workspace_id = NEW.workspace_id AND status = 'active';
+    WHERE workspace_id = NEW.workspace_id
+      AND status IN ('invited', 'active');
 
-    IF active_count >= 5 THEN
-      RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'workspace_active_member_limit_exceeded';
+    IF reserved_seats >= 5 THEN
+      RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'workspace_member_seat_limit_exceeded';
     END IF;
   END IF;
 
   RETURN NEW;
 END;
-$;
+$$;
 
 REVOKE ALL ON FUNCTION nexus_private.enforce_workspace_member_limit() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION nexus_private.enforce_workspace_member_limit() TO nexus_app;
 
 CREATE TRIGGER workspace_members_limit_active
-  BEFORE INSERT OR UPDATE ON public.workspace_members
+  BEFORE INSERT OR UPDATE OR DELETE ON public.workspace_members
   FOR EACH ROW EXECUTE FUNCTION nexus_private.enforce_workspace_member_limit();
 
 CREATE POLICY workspace_members_select_scope ON workspace_members
