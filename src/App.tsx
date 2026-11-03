@@ -172,24 +172,24 @@ const formConfig: Record<Exclude<ModalKind, null>, { title: string; prefix: stri
     { key: 'dueDate', label: 'Due date', type: 'date', required: true }, { key: 'campaignId', label: 'Campaign', type: 'campaign' }
   ] },
   content: { title: 'Create content', prefix: 'CNT', fields: [
-    { key: 'title', label: 'Content title', required: true }, { key: 'platform', label: 'Platform', type: 'select', options: ['Instagram','TikTok','YouTube','Other'].map(x=>({label:x,value:x})) },
-    { key: 'pillar', label: 'Content pillar' }, { key: 'format', label: 'Format', type: 'select', options: ['Carousel','Short video','Reels','Stories','YouTube video','Shorts','Static'].map(x=>({label:x,value:x})) },
-    { key: 'hook', label: 'Hook', type: 'textarea', wide: true }, { key: 'cta', label: 'CTA' }, { key: 'owner', label: 'Owner' },
-    { key: 'status', label: 'Status', type: 'select', options: ['Idea','Brief','Production','Review','Changes Requested','Approved','Scheduled','Published','Evaluated'].map(x=>({label:x,value:x})) },
+    { key: 'title', label: 'Content title', required: true }, { key: 'platform', label: 'Platform', type: 'select', required: true, options: ['Instagram','TikTok','YouTube','Other'].map(x=>({label:x,value:x})) },
+    { key: 'pillar', label: 'Content pillar', required: true }, { key: 'format', label: 'Format', type: 'select', required: true, options: ['Carousel','Short video','Reels','Stories','YouTube video','Shorts','Static'].map(x=>({label:x,value:x})) },
+    { key: 'hook', label: 'Hook', type: 'textarea', required: true, wide: true }, { key: 'cta', label: 'CTA', required: true }, { key: 'owner', label: 'Owner', required: true },
+    { key: 'status', label: 'Status', type: 'select', required: true, options: ['Idea','Brief','Production','Review','Changes Requested','Approved','Scheduled','Published','Evaluated'].map(x=>({label:x,value:x})) },
     { key: 'publishDate', label: 'Publish date', type: 'date' }, { key: 'campaignId', label: 'Campaign', type: 'campaign' }
   ] },
   expense: { title: 'Add expense', prefix: 'EXP', fields: [
-    { key: 'title', label: 'Expense name', required: true }, { key: 'category', label: 'Category', type: 'select', options: ['Paid media','KOL','Production','Software','Other'].map(x=>({label:x,value:x})) },
-    { key: 'vendor', label: 'Vendor' }, { key: 'amount', label: 'Amount (IDR)', type: 'number', required: true },
-    { key: 'date', label: 'Date', type: 'date' }, { key: 'channel', label: 'Channel' },
-    { key: 'type', label: 'Cost type', type: 'select', options: [{label:'Actual',value:'actual'},{label:'Committed',value:'committed'}] },
+    { key: 'title', label: 'Expense name', required: true }, { key: 'category', label: 'Category', type: 'select', required: true, options: ['Paid media','KOL','Production','Software','Other'].map(x=>({label:x,value:x})) },
+    { key: 'vendor', label: 'Vendor', required: true }, { key: 'amount', label: 'Amount (IDR)', type: 'number', required: true },
+    { key: 'date', label: 'Date', type: 'date', required: true }, { key: 'channel', label: 'Channel' },
+    { key: 'type', label: 'Cost type', type: 'select', required: true, options: [{label:'Actual',value:'actual'},{label:'Committed',value:'committed'}] },
     { key: 'campaignId', label: 'Campaign', type: 'campaign' }
   ] },
   kol: { title: 'Add creator', prefix: 'KOL', fields: [
-    { key: 'name', label: 'Creator name', required: true }, { key: 'platform', label: 'Primary platform', type: 'select', options: ['Instagram','TikTok','YouTube'].map(x=>({label:x,value:x})) },
-    { key: 'handle', label: 'Handle' }, { key: 'instagramUrl', label: 'Instagram profile URL' }, { key: 'niche', label: 'Niche' },
-    { key: 'contact', label: 'Contact' }, { key: 'rate', label: 'Rate card (IDR)', type: 'number' },
-    { key: 'stage', label: 'Pipeline stage', type: 'select', options: ['Prospect','Contacted','Negotiation','Deal','Briefed','Draft Review','Approved','Published','Paid','Evaluated'].map(x=>({label:x,value:x})) },
+    { key: 'name', label: 'Creator name', required: true }, { key: 'platform', label: 'Primary platform', type: 'select', required: true, options: ['Instagram','TikTok','YouTube'].map(x=>({label:x,value:x})) },
+    { key: 'handle', label: 'Handle', required: true }, { key: 'instagramUrl', label: 'Instagram profile URL' }, { key: 'niche', label: 'Niche', required: true },
+    { key: 'contact', label: 'Contact' }, { key: 'rate', label: 'Rate card (IDR)', type: 'number', required: true },
+    { key: 'stage', label: 'Pipeline stage', type: 'select', required: true, options: ['Prospect','Contacted','Negotiation','Deal','Briefed','Draft Review','Approved','Published','Paid','Evaluated'].map(x=>({label:x,value:x})) },
     { key: 'campaignId', label: 'Campaign', type: 'campaign' }, { key: 'publishDate', label: 'Planned publish date', type: 'date' }, { key: 'notes', label: 'Notes', type: 'textarea', wide: true }
   ] },
   order: { title: 'Add order', prefix: 'ORD', fields: [
@@ -198,14 +198,14 @@ const formConfig: Record<Exclude<ModalKind, null>, { title: string; prefix: stri
     { key: 'amount', label: 'Order amount (IDR)', type: 'number', required: true }, { key: 'utm', label: 'UTM / source reference' }, { key: 'campaignId', label: 'Campaign', type: 'campaign' }
   ] },
   brief: { title: 'Create brief', prefix: 'BRF', fields: [
-    { key: 'title', label: 'Brief title', required: true }, { key: 'type', label: 'Brief type', type: 'select', options: ['Campaign','Content','Ads','KOL'].map(x=>({label:x,value:x})) },
-    { key: 'owner', label: 'Owner' }, { key: 'status', label: 'Status', type: 'select', options: ['Draft','In review','Approved'].map(x=>({label:x,value:x})) },
+    { key: 'title', label: 'Brief title', required: true }, { key: 'type', label: 'Brief type', type: 'select', required: true, options: ['Campaign','Content','Ads','KOL'].map(x=>({label:x,value:x})) },
+    { key: 'owner', label: 'Owner' }, { key: 'status', label: 'Status', type: 'select', required: true, options: ['Draft','In review','Approved'].map(x=>({label:x,value:x})) },
     { key: 'campaignId', label: 'Campaign', type: 'campaign' }
   ] },
   competitor: { title: 'Track competitor account', prefix: 'CMP', fields: [
-    { key: 'name', label: 'Account name', required: true }, { key: 'platform', label: 'Platform', type: 'select', options: ['Instagram','TikTok'].map(x=>({label:x,value:x})) },
-    { key: 'handle', label: 'Handle' }, { key: 'url', label: 'Profile URL' }, { key: 'label', label: 'Tracking label' },
-    { key: 'status', label: 'Tracking status', type: 'select', options: ['Tracking','Paused'].map(x=>({label:x,value:x})) }, { key: 'notes', label: 'Notes', type: 'textarea', wide: true }
+    { key: 'name', label: 'Account name', required: true }, { key: 'platform', label: 'Platform', type: 'select', required: true, options: ['Instagram','TikTok'].map(x=>({label:x,value:x})) },
+    { key: 'handle', label: 'Handle', required: true }, { key: 'url', label: 'Profile URL', required: true }, { key: 'label', label: 'Tracking label', required: true },
+    { key: 'status', label: 'Tracking status', type: 'select', required: true, options: ['Tracking','Paused'].map(x=>({label:x,value:x})) }, { key: 'notes', label: 'Notes', type: 'textarea', wide: true }
   ] },
   action: { title: 'Create action item', prefix: 'TSK', fields: [
     { key: 'title', label: 'Action item', required: true }, { key: 'owner', label: 'Task owner', required: true }, { key: 'assignee', label: 'PIC', required: true },
@@ -215,8 +215,8 @@ const formConfig: Record<Exclude<ModalKind, null>, { title: string; prefix: stri
   experiment: { title: 'Log Ads experiment', prefix: 'EXP', fields: [
     { key: 'name', label: 'Experiment name', required: true }, { key: 'owner', label: 'Owner', required: true },
     { key: 'hypothesis', label: 'Hypothesis', type: 'textarea', wide: true, required: true },
-    { key: 'changeMade', label: 'What changed?', type: 'textarea', wide: true },
-    { key: 'primaryMetric', label: 'Primary metric', required: true }, { key: 'successCriteria', label: 'Success criteria', type: 'textarea', wide: true },
+    { key: 'changeMade', label: 'What changed?', type: 'textarea', wide: true, required: true },
+    { key: 'primaryMetric', label: 'Primary metric', required: true }, { key: 'successCriteria', label: 'Success criteria', type: 'textarea', wide: true, required: true },
     { key: 'status', label: 'Status', type: 'select', options: ['Planned','Running','Completed','Inconclusive','Cancelled'].map(x=>({label:x,value:x})) },
     { key: 'startDate', label: 'Start date', type: 'date' }, { key: 'endDate', label: 'End date', type: 'date' }, { key: 'campaignId', label: 'Campaign', type: 'campaign' }
   ] }
@@ -226,11 +226,12 @@ function CreateModal({ kind, campaigns, onClose, onSave }: {
   kind: Exclude<ModalKind, null>; campaigns: Campaign[]; onClose: () => void; onSave: (values: Record<string, any>) => void;
 }) {
   const config = formConfig[kind];
-  const [values, setValues] = useState<Record<string, any>>({
+  const [values, setValues] = useState<Record<string, any>>(() => ({
     objective: 'Sales', owner: 'Marketing Lead', startDate: jakartaDateKey(), endDate: '',
     status: (kind === 'task' || kind === 'action') ? 'To Do' : kind === 'content' ? 'Idea' : kind === 'kol' ? 'Prospect' : kind === 'expense' ? 'actual' : kind === 'order' ? 'Paid' : kind === 'brief' ? 'Draft' : kind === 'competitor' ? 'Tracking' : kind === 'experiment' ? 'Planned' : 'Draft',
-    priority: 'Medium', dueDate: jakartaDateKey(), publishDate: jakartaDateKey(), date: jakartaDateKey()
-  });
+    priority: 'Medium', dueDate: jakartaDateKey(), publishDate: jakartaDateKey(), date: jakartaDateKey(),
+    ...Object.fromEntries(config.fields.filter(field => field.type === 'select').map(field => [field.key, field.options?.[0]?.value ?? '']))
+  }));
   const [step, setStep] = useState(0);
   const [error, setError] = useState('');
   const setValue = (key: string, value: any) => setValues(prev => ({ ...prev, [key]: value }));
@@ -583,7 +584,7 @@ function WorkspaceApp({
           await update('contents', curr => [next, ...curr]); successMessage = 'Content record tersimpan di PostgreSQL.'; break;
         }
         case 'expense': {
-          const next: Expense = { id: makeId('EXP', data.expenses.length, data.expenses.map(e=>e.id)), title: values.title, category: values.category, vendor: values.vendor, amount: values.amount, date: values.date, channel: values.channel, type: values.type, campaignId: values.campaignId };
+          const next: Expense = { id: makeId('EXP', data.expenses.length, data.expenses.map(e=>e.id)), title: values.title, category: values.category, vendor: values.vendor || 'Unspecified', amount: values.amount, date: values.date, channel: values.channel, type: values.type, campaignId: values.campaignId };
           await update('expenses', curr => [next, ...curr]); successMessage = 'Expense tersimpan di PostgreSQL.'; break;
         }
         case 'kol': {
@@ -605,7 +606,7 @@ function WorkspaceApp({
           await update('experiments', curr => [next, ...curr]); successMessage = 'Experiment tersimpan di PostgreSQL.'; break;
         }
         case 'competitor': {
-          const next: Competitor = { id: makeSequentialId('CMP', data.competitors.map(c=>c.id), 4), name: values.name, platform: values.platform, handle: values.handle, url: values.url, label: values.label, notes: values.notes, status: values.status };
+          const next: Competitor = { id: makeSequentialId('CMP', data.competitors.map(c=>c.id), 4), name: values.name, platform: values.platform, handle: values.handle, url: values.url, label: values.label, notes: values.notes || '', status: values.status };
           await update('competitors', curr => [next, ...curr]); successMessage = 'Competitor tersimpan di PostgreSQL.'; break;
         }
       }
