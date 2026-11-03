@@ -254,7 +254,7 @@ function WorkspaceSetup({ onCreated }: { onCreated: (workspace: WorkspaceSummary
         </form>
         <div className="auth-user-line">
           <span>{session.user.email || session.user.id}</span>
-          <button type="button" className="auth-retry" onClick={() => void signOut()}>Sign out</button>
+          <button type="button" className="auth-retry" onClick={() => void signOut().catch(signOutError => setError(messageFor(signOutError)))}>Sign out</button>
         </div>
       </div>
     </FullScreenState>
