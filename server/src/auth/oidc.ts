@@ -1,4 +1,4 @@
-import { createRemoteJWKSet, jwtVerify, type JWTPayload, type RemoteJWKSet } from 'jose';
+import { createRemoteJWKSet, jwtVerify, type RemoteJWKSet } from 'jose';
 import type { AppConfig } from '../config.js';
 import { AppError } from '../errors.js';
 import type { AuthenticatedUser } from './types.js';
