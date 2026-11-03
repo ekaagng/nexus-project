@@ -315,6 +315,20 @@ export async function registerAuthRoutes(
   config: AppConfig,
   authenticate: preHandlerHookHandler
 ): Promise<void> {
+  app.get('/api/v1/auth/oidc/status', async (_request, reply) => {
+    const loginAvailable = Boolean(
+      config.oidcIssuerUrl &&
+      config.oidcJwksUrl &&
+      config.oidcClientId &&
+      config.oidcRedirectUri &&
+      config.encryptionKey &&
+      (config.oidcClientAuthMethod === 'none' || config.oidcClientSecret)
+    );
+    return reply
+      .header('Cache-Control', 'no-store')
+      .send({ loginAvailable });
+  });
+
   app.get('/api/v1/auth/oidc/start', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (_request, reply) => {
     const settings = requireLoginConfig(config);
     const discovery = await loadDiscovery(settings.issuer);
