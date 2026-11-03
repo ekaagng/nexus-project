@@ -44,7 +44,7 @@ RETURNS TEXT
 LANGUAGE SQL STABLE SECURITY DEFINER
 SET search_path = ''
 AS $$
-  SELECT wm.role FROM workspace_members wm
+  SELECT wm.role FROM public.workspace_members wm
   WHERE wm.workspace_id = p_workspace_id
     AND wm.user_id = p_user_id
     AND wm.status = 'active'
@@ -80,7 +80,8 @@ CREATE TABLE integration_connections (
   last_error_message_safe TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE (workspace_id, provider, external_account_id)
+  UNIQUE (workspace_id, provider, external_account_id),
+  UNIQUE (workspace_id, id)
 );
 CREATE INDEX integration_connections_workspace_idx ON integration_connections(workspace_id, provider, status);
 
@@ -99,7 +100,14 @@ CREATE TABLE integration_secrets (
   CHECK (octet_length(access_token_iv) = 12),
   CHECK (octet_length(access_token_auth_tag) = 16),
   CHECK (refresh_token_iv IS NULL OR octet_length(refresh_token_iv) = 12),
-  CHECK (refresh_token_auth_tag IS NULL OR octet_length(refresh_token_auth_tag) = 16)
+  CHECK (refresh_token_auth_tag IS NULL OR octet_length(refresh_token_auth_tag) = 16),
+  CHECK (
+    (refresh_token_ciphertext IS NULL AND refresh_token_iv IS NULL AND refresh_token_auth_tag IS NULL)
+    OR
+    (refresh_token_ciphertext IS NOT NULL AND refresh_token_iv IS NOT NULL AND refresh_token_auth_tag IS NOT NULL)
+  ),
+  FOREIGN KEY (workspace_id, connection_id)
+    REFERENCES integration_connections(workspace_id, id) ON DELETE CASCADE
 );
 
 CREATE TABLE sync_jobs (
@@ -129,7 +137,9 @@ CREATE TABLE sync_jobs (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   CHECK (period_start < period_end),
-  UNIQUE (workspace_id, idempotency_key)
+  UNIQUE (workspace_id, idempotency_key),
+  FOREIGN KEY (workspace_id, connection_id)
+    REFERENCES integration_connections(workspace_id, id) ON DELETE CASCADE
 );
 CREATE INDEX sync_jobs_queue_idx ON sync_jobs(status, run_after, created_at);
 CREATE INDEX sync_jobs_workspace_idx ON sync_jobs(workspace_id, created_at DESC);
@@ -141,7 +151,9 @@ CREATE TABLE sync_cursors (
   cursor_value TEXT,
   last_successful_sync_at TIMESTAMPTZ,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  PRIMARY KEY (workspace_id, connection_id, resource)
+  PRIMARY KEY (workspace_id, connection_id, resource),
+  FOREIGN KEY (workspace_id, connection_id)
+    REFERENCES integration_connections(workspace_id, id) ON DELETE CASCADE
 );
 
 CREATE TABLE orders (
@@ -169,7 +181,9 @@ CREATE TABLE orders (
   synced_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE (workspace_id, provider, external_order_id)
+  UNIQUE (workspace_id, provider, external_order_id),
+  FOREIGN KEY (workspace_id, connection_id)
+    REFERENCES integration_connections(workspace_id, id) ON DELETE SET NULL (connection_id)
 );
 CREATE INDEX orders_workspace_date_idx ON orders(workspace_id, placed_at DESC);
 CREATE INDEX orders_workspace_campaign_idx ON orders(workspace_id, internal_campaign_id);
@@ -199,7 +213,9 @@ CREATE TABLE ad_performance_daily (
   synced_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE (workspace_id, provider, external_account_id, metric_date, external_campaign_id, external_adset_id, external_ad_id, attribution_window)
+  UNIQUE (workspace_id, provider, external_account_id, metric_date, external_campaign_id, external_adset_id, external_ad_id, attribution_window),
+  FOREIGN KEY (workspace_id, connection_id)
+    REFERENCES integration_connections(workspace_id, id) ON DELETE CASCADE
 );
 CREATE INDEX ad_performance_workspace_date_idx ON ad_performance_daily(workspace_id, metric_date DESC);
 
@@ -223,7 +239,9 @@ CREATE TABLE social_account_daily_metrics (
   synced_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE (workspace_id, provider, external_account_id, metric_date)
+  UNIQUE (workspace_id, provider, external_account_id, metric_date),
+  FOREIGN KEY (workspace_id, connection_id)
+    REFERENCES integration_connections(workspace_id, id) ON DELETE CASCADE
 );
 CREATE INDEX social_metrics_workspace_date_idx ON social_account_daily_metrics(workspace_id, metric_date DESC);
 
@@ -251,7 +269,9 @@ CREATE TABLE content_performance_snapshots (
   synced_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE (workspace_id, provider, external_account_id, external_content_id, metric_date)
+  UNIQUE (workspace_id, provider, external_account_id, external_content_id, metric_date),
+  FOREIGN KEY (workspace_id, connection_id)
+    REFERENCES integration_connections(workspace_id, id) ON DELETE CASCADE
 );
 CREATE INDEX content_metrics_workspace_date_idx ON content_performance_snapshots(workspace_id, metric_date DESC);
 
@@ -270,7 +290,9 @@ CREATE TABLE source_lineage (
   validation_state TEXT NOT NULL CHECK (validation_state IN ('valid', 'incomplete', 'rejected', 'unverified')),
   imported_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   synced_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE (workspace_id, provider, connection_id, source_record_id)
+  UNIQUE (workspace_id, provider, connection_id, source_record_id),
+  FOREIGN KEY (workspace_id, connection_id)
+    REFERENCES integration_connections(workspace_id, id) ON DELETE SET NULL (connection_id)
 );
 CREATE INDEX source_lineage_entity_idx ON source_lineage(workspace_id, entity_type, entity_id);
 
