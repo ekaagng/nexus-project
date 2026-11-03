@@ -227,7 +227,7 @@ VALUES ('20000000-0000-4000-8000-000000000002', 'ci-user-b', 'owner', 'active');
 SELECT set_config('nexus.user_id', 'ci-user-a', TRUE);
 SELECT set_config('nexus.workspace_id', '20000000-0000-4000-8000-000000000002', TRUE);
 
-DO $
+DO $$
 DECLARE visible_members INTEGER;
 DECLARE visible_campaigns INTEGER;
 DECLARE rejected BOOLEAN := FALSE;
@@ -274,9 +274,9 @@ BEGIN
     RAISE EXCEPTION 'Tenant A cross-tenant business-data write was not rejected';
   END IF;
 END;
-$;
+$$;
 
-DO $
+DO $$
 DECLARE rejected BOOLEAN := FALSE;
 BEGIN
   BEGIN
@@ -290,7 +290,7 @@ BEGIN
     RAISE EXCEPTION 'Tenant A cross-tenant audit write was not rejected';
   END IF;
 END;
-$;
+$$;
 
 -- Runtime-role session persistence and revocation permissions.
 INSERT INTO public.auth_sessions (session_hash, user_id, issuer, email, email_verified, expires_at)
