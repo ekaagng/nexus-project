@@ -87,6 +87,7 @@ test('production rejects non-HTTPS frontend and callback URLs', () => {
     OIDC_AUDIENCE: 'nexus-api',
     OIDC_JWKS_URL: 'https://identity.example.com/.well-known/jwks.json',
     OIDC_CLIENT_ID: 'nexus-web',
+    OIDC_CLIENT_SECRET: 'client-secret',
     OIDC_REDIRECT_URI: 'http://api.example.com/api/v1/auth/oidc/callback',
     AUTH_FRONTEND_URL: 'https://app.example.com',
     CORS_ORIGINS: 'https://app.example.com',
