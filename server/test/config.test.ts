@@ -96,3 +96,29 @@ test('production rejects non-HTTPS frontend and callback URLs', () => {
 
   assert.throws(() => loadConfig(productionEnv), /OIDC_REDIRECT_URI must use HTTPS/);
 });
+
+test('credentialed browser sessions reject wildcard CORS origins', () => {
+  assert.throws(
+    () => loadConfig({ ...baseEnv, CORS_ORIGINS: '*', AUTH_FRONTEND_URL: 'http://localhost:5173' }),
+    /cannot contain \*/
+  );
+});
+
+test('browser login fails fast when its encryption key or confidential-client secret is missing', () => {
+  const oidcEnv = {
+    ...baseEnv,
+    OIDC_ISSUER_URL: 'https://identity.example.com',
+    OIDC_AUDIENCE: 'nexus-api',
+    OIDC_JWKS_URL: 'https://identity.example.com/.well-known/jwks.json',
+    OIDC_CLIENT_ID: 'nexus-web',
+    OIDC_REDIRECT_URI: 'http://localhost:8787/api/v1/auth/oidc/callback'
+  };
+
+  assert.throws(() => loadConfig(oidcEnv), /APP_ENCRYPTION_KEY is required/);
+
+  const key = Buffer.alloc(32, 4).toString('base64');
+  assert.throws(
+    () => loadConfig({ ...oidcEnv, APP_ENCRYPTION_KEY: key }),
+    /OIDC_CLIENT_SECRET is required/
+  );
+});
