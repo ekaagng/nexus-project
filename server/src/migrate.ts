@@ -7,8 +7,11 @@ import { loadConfig } from './config.js';
 
 async function main(): Promise<void> {
   const config = loadConfig();
+  if (!config.migrationDatabaseUrl) {
+    throw new Error('MIGRATION_DATABASE_URL is required. Run migrations with the dedicated schema-owner role.');
+  }
   const pool = new Pool({
-    connectionString: config.migrationDatabaseUrl || config.databaseUrl,
+    connectionString: config.migrationDatabaseUrl,
     ssl: config.databaseSsl ? { rejectUnauthorized: true } : undefined
   });
   const migrationDirectory = join(dirname(fileURLToPath(import.meta.url)), '../migrations');
