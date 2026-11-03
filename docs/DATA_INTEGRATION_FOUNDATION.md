@@ -51,7 +51,7 @@ Provider-specific fields must be normalized before they reach dashboard queries.
 | `source_lineage` | Provider record ID, payload hash, timestamps and validation state |
 | `audit_logs` | Actor, action and workspace audit trail |
 
-Amounts use `NUMERIC(18,2)`, not floating-point columns. Rates and counters remain nullable when the provider does not return a metric. Missing data must be presented as N/A, not fabricated as zero.
+Amounts use PostgreSQL `NUMERIC(18,2)` and are passed through the ingestion boundary as decimal strings (for example, `125000.00`), not JavaScript floating-point numbers. Rates and counters remain nullable when the provider does not return a metric. Missing data must be presented as N/A, not fabricated as zero.
 
 ### Revenue definitions
 
