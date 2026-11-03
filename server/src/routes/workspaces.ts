@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { FastifyInstance, FastifyRequest } from 'fastify';
+import type { FastifyInstance, FastifyRequest, preHandlerHookHandler } from 'fastify';
 import { z } from 'zod';
 import type { Pool } from 'pg';
 import { withUserContext } from '../db.js';
@@ -15,7 +15,7 @@ function requireUser(request: FastifyRequest): AuthenticatedUser {
   return request.authUser;
 }
 
-export async function registerWorkspaceRoutes(app: FastifyInstance, pool: Pool, authenticate: (request: FastifyRequest) => Promise<void>): Promise<void> {
+export async function registerWorkspaceRoutes(app: FastifyInstance, pool: Pool, authenticate: preHandlerHookHandler): Promise<void> {
   app.get('/api/v1/workspaces', { preHandler: authenticate }, async (request) => {
     const user = requireUser(request);
     return withUserContext(pool, user.userId, async (client) => {
