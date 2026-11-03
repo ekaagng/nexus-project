@@ -1,16 +1,18 @@
 import { z } from 'zod';
 import type { PoolClient } from 'pg';
 
+const decimalAmountSchema = z.string().regex(/^\\d{1,16}(?:\\.\\d{1,2})?$/);
+
 const normalizedOrderSchema = z.object({
   provider: z.enum(['scalev', 'lynk_id', 'manual']),
   externalOrderId: z.string().min(1).max(240),
   placedAt: z.string().datetime({ offset: true }),
   status: z.enum(['pending', 'paid', 'partially_refunded', 'refunded', 'cancelled', 'failed']),
   currency: z.string().regex(/^[A-Z]{3}$/).default('IDR'),
-  grossAmount: z.number().finite().nonnegative(),
-  discountAmount: z.number().finite().nonnegative().default(0),
-  refundAmount: z.number().finite().nonnegative().default(0),
-  netAmount: z.number().finite().nonnegative(),
+  grossAmount: decimalAmountSchema,
+  discountAmount: decimalAmountSchema.default('0'),
+  refundAmount: decimalAmountSchema.default('0'),
+  netAmount: decimalAmountSchema,
   utmSource: z.string().max(500).optional(),
   utmMedium: z.string().max(500).optional(),
   utmCampaign: z.string().max(500).optional(),
@@ -22,7 +24,7 @@ const normalizedOrderSchema = z.object({
   sourceUpdatedAt: z.string().datetime({ offset: true }).optional()
 });
 
-export type NormalizedOrder = z.infer<typeof normalizedOrderSchema>;
+export type NormalizedOrder = z.input<typeof normalizedOrderSchema>;
 
 const lineageUpdate = `
   DO UPDATE SET entity_id = EXCLUDED.entity_id,
