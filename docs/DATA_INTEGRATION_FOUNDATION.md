@@ -76,7 +76,7 @@ All API routes except health endpoints require a Bearer access token. Workspace-
 
 ## 5. Local setup
 
-1. Install Node.js 20+ and PostgreSQL 15+.
+1. Install Node.js 20+ and PostgreSQL 15+ (the schema uses column-specific `ON DELETE SET NULL` foreign keys)..
 2. Install dependencies with `npm install`.
 3. Copy `.env.example` to `.env` and fill in `DATABASE_URL`.
 4. Apply the schema using `npm run db:migrate`.
