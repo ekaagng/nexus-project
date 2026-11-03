@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyRequest, preHandlerHookHandler } from 'fastify';
-import type { Pool } from 'pg';
+import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
 import { getWorkspaceHeader, withWorkspaceContext } from '../db.js';
 import { AppError } from '../errors.js';
@@ -289,7 +289,7 @@ function toApiRecord(resource: BusinessResource, row: Record<string, unknown>): 
 }
 
 async function writeAudit(
-  client: { query: (sql: string, values?: unknown[]) => Promise<unknown> },
+  client: PoolClient,
   workspaceId: string,
   userId: string,
   action: string,
