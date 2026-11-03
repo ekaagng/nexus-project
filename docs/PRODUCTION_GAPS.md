@@ -1,4 +1,4 @@
-> **Backend implementation update (2026-11-03):** `feat/data-integration-foundation` adds the PostgreSQL/Fastify foundation. Its child branch `feat/authentication-management` adds Owner-only workspace member/invitation APIs, verified-email invitation acceptance, reserved seat enforcement and access audit events. See [DATA_INTEGRATION_FOUNDATION.md](DATA_INTEGRATION_FOUNDATION.md) and [WORKSPACE_ACCESS_MANAGEMENT.md](WORKSPACE_ACCESS_MANAGEMENT.md). This still does not provide a production login flow, opaque browser sessions, email delivery, provider OAuth, background workers or live dashboard reads.
+> **Backend implementation update (2026-11-03):** `feat/data-integration-foundation` adds the PostgreSQL/Fastify foundation. Its child branch `feat/authentication-management` adds Owner-only workspace member/invitation APIs, verified-email invitation acceptance, reserved seat enforcement and access audit events. See [DATA_INTEGRATION_FOUNDATION.md](DATA_INTEGRATION_FOUNDATION.md) and [WORKSPACE_ACCESS_MANAGEMENT.md](WORKSPACE_ACCESS_MANAGEMENT.md). A generic OIDC Authorization Code + PKCE flow, opaque PostgreSQL-backed browser sessions, CSRF Origin checks, logout and session revocation are now implemented on the child branch. A real provider must still be configured, and the React frontend is not yet connected to the session endpoints.
 
 # NEXUS v0.3 — Implementation traceability & production gaps
 
@@ -35,7 +35,8 @@
 
 - Choose and configure the production login method (Google OAuth, password, magic link, or combination). The PRD has not finalized this.
 - **Implemented on `feat/authentication-management`:** a server-owned workspace invitation allowlist; immutable initial Owner; Owner-only list/invite/revoke endpoints; verified-email invitation acceptance; Member revocation; five-seat enforcement including pending invitations; and audit events for invitation create/accept/expire/revoke and Member revoke.
-- Still required: select and configure the production identity provider and login flow; connect the frontend Access Management screen; add opaque server sessions, expiry/rotation, CSRF protection, logout, revoke-all-user-sessions, and session revalidation; add audit events for login, invalid access, session revocation and security anomalies.
+- **Implemented on the branch:** provider-neutral OIDC Authorization Code + PKCE (S256), state/nonce validation, encrypted short-lived PKCE verifier storage, opaque server sessions with hashed tokens and fixed expiry, per-request session revalidation, SameSite/HttpOnly cookies, exact-Origin CSRF checks, logout, list/revoke-one/revoke-all session endpoints, and security events for login/logout/revocation.
+- Still required: register and configure a real identity provider; connect the React login/access/session UI; implement session rotation/renewal, global IdP logout, account suspension/deactivation, email delivery and additional security anomaly monitoring.
 - Define granular Member permissions beyond the confirmed Access Management restriction.
 
 ### Database and domain API
@@ -83,7 +84,7 @@
 | Capability | Current state |
 |---|---|
 | Shared multi-user workspace | Backend workspace/membership and integration foundation exists; business-domain records and frontend remain browser-local |
-| Real login / allowlist / session revoke | Partial — OIDC Bearer-token verification and backend Owner-managed invitation/member APIs exist; production login, browser sessions and session revocation are not implemented |
+| Real login / allowlist / session revoke | Backend OIDC PKCE flow and opaque session lifecycle are implemented but require provider configuration; frontend remains localStorage-backed and is not wired to login/session endpoints |
 | Backend database and workspace isolation | Partial — PostgreSQL RLS currently covers workspace, membership and integration foundation tables; business-domain data migration remains |
 | Official Meta/Scalev/Lynk/social API integrations | Not connected |
 | Scheduled 00:00 WIB PDF + Gmail delivery | Not implemented — manual browser print only |
