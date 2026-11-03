@@ -8,6 +8,8 @@ import { createAuthenticate } from './auth/middleware.js';
 import { createTokenVerifier } from './auth/oidc.js';
 import { registerHealthRoutes } from './routes/health.js';
 import { registerWorkspaceRoutes } from './routes/workspaces.js';
+import { registerAuthRoutes } from './routes/auth.js';
+import { registerWorkspaceAccessRoutes } from './routes/workspace-access.js';
 import { registerIntegrationRoutes } from './routes/integrations.js';
 import { registerSyncJobRoutes } from './routes/sync-jobs.js';
 import { AppError } from './errors.js';
@@ -20,11 +22,11 @@ export async function buildApp(config: AppConfig, pool: Pool): Promise<FastifyIn
   });
 
   app.decorateRequest('authUser', null);
-  const authenticate = createAuthenticate(createTokenVerifier(config));
+  const authenticate = createAuthenticate(createTokenVerifier(config), pool, config);
 
   await app.register(cors, {
     origin: config.corsOrigins,
-    credentials: false,
+    credentials: true,
     allowedHeaders: ['Authorization', 'Content-Type', 'X-Workspace-Id'],
     methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS']
   });
@@ -47,7 +49,9 @@ export async function buildApp(config: AppConfig, pool: Pool): Promise<FastifyIn
   });
 
   await registerHealthRoutes(app, pool);
+  await registerAuthRoutes(app, pool, config, authenticate);
   await registerWorkspaceRoutes(app, pool, authenticate);
+  await registerWorkspaceAccessRoutes(app, pool, authenticate);
   await registerIntegrationRoutes(app, pool, authenticate);
   await registerSyncJobRoutes(app, pool, authenticate);
 

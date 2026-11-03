@@ -2,11 +2,13 @@ name: NEXUS checks
 
 on:
   pull_request:
-    branches: [main]
+    branches:
+      - main
+      - 'feat/**'
   push:
     branches:
       - main
-      - feat/data-integration-foundation
+      - 'feat/**'
 
 permissions:
   contents: read

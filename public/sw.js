@@ -1,4 +1,4 @@
-const CACHE_NAME = 'nexus-shell-v0.3.1';
+const CACHE_NAME = 'nexus-shell-v0.3.2';
 const APP_SHELL = ['/', '/index.html', '/manifest.webmanifest', '/icons/nexus.svg', '/icons/nexus-192.png', '/icons/nexus-512.png'];
 
 self.addEventListener('install', (event) => {
@@ -34,7 +34,10 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   const request = event.request;
-  if (request.method !== 'GET' || new URL(request.url).origin !== self.location.origin) return;
+  const requestUrl = new URL(request.url);
+  if (request.method !== 'GET' || requestUrl.origin !== self.location.origin) return;
+  // Never cache authentication, workspace, or other API responses. They can contain private account data.
+  if (requestUrl.pathname.startsWith('/api/')) return;
 
   if (request.mode === 'navigate') {
     event.respondWith(fetch(request).then((response) => {

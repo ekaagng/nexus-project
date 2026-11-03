@@ -30,6 +30,7 @@ export function createTokenVerifier(config: AppConfig): TokenVerifier {
       return {
         userId: subject,
         email: typeof verified.payload.email === 'string' ? verified.payload.email : undefined,
+        emailVerified: verified.payload.email_verified === true,
         issuer
       };
     } catch (error) {
