@@ -83,6 +83,8 @@ All API routes except health endpoints require a Bearer access token. Workspace-
 5. Start the API using `npm run dev:api`.
 6. Check `http://localhost:8787/health/live` and `http://localhost:8787/health/ready`.
 
+The migration runner intentionally requires `MIGRATION_DATABASE_URL`. Do not reuse the runtime `nexus_app` role for schema changes.
+
 The existing frontend remains on Vite port 5173. Its demo data is still localStorage-backed; this foundation does not silently replace the demo UI with unverified live metrics.
 
 ## 6. Database role and RLS requirement
