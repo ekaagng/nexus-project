@@ -16,7 +16,7 @@
 
 ## API
 
-All routes require `Authorization: Bearer <OIDC access token>`, except the public health endpoints. Workspace administration routes also require `X-Workspace-Id: <uuid>`.
+Protected routes accept either `Authorization: Bearer <OIDC access token>` or the server-owned `nexus_session` cookie. Browser session cookies are `HttpOnly`, `SameSite=Lax`, and `Secure` in production. Workspace administration routes also require `X-Workspace-Id: <uuid>`.
 
 | Method | Path | Access | Purpose |
 |---|---|---|---|
@@ -26,6 +26,13 @@ All routes require `Authorization: Bearer <OIDC access token>`, except the publi
 | DELETE | `/api/v1/workspaces/invitations/:invitationId` | Owner | Revoke a pending invitation |
 | DELETE | `/api/v1/workspaces/members/:memberUserId` | Owner | Revoke an active Member |
 | POST | `/api/v1/workspaces/invitations/accept` | Authenticated invitee | Accept an invitation matching the verified token email |
+| GET | `/api/v1/auth/oidc/start` | Public | Start OIDC Authorization Code + PKCE login |
+| GET | `/api/v1/auth/oidc/callback` | OIDC callback | Verify state, exchange code, validate ID token, create session |
+| GET | `/api/v1/auth/session` | Authenticated | Return the current identity and auth method |
+| GET | `/api/v1/auth/sessions` | Authenticated | List the user's active browser sessions |
+| DELETE | `/api/v1/auth/sessions/:sessionId` | Authenticated | Revoke one of the user's sessions |
+| POST | `/api/v1/auth/logout` | Browser session | Revoke the current browser session |
+| POST | `/api/v1/auth/sessions/revoke-all` | Authenticated | Revoke every active browser session for the user |
 
 ### Create invitation
 
@@ -87,6 +94,46 @@ Migration: `server/migrations/002_workspace_access_management.sql`.
 - Invitation create, accept, expiry, revoke, and member revoke actions are written to `audit_logs`.
 - Initial Owner immutability and tenant isolation continue to be enforced by the existing database constraints and RLS policies.
 
+
+## Browser login and session management
+
+The API implements a provider-neutral OIDC Authorization Code flow with PKCE (S256). It does not select or configure a specific identity provider.
+
+1. The browser navigates to `GET /api/v1/auth/oidc/start`.
+2. The API discovers the configured issuer, creates random `state`, `nonce`, and PKCE values, stores only hashes for state/nonce, and encrypts the short-lived code verifier with `APP_ENCRYPTION_KEY`.
+3. The API sets an HttpOnly, SameSite=Lax state cookie and redirects to the provider.
+4. The provider returns to `OIDC_REDIRECT_URI`. The callback verifies the state against both the cookie and the database, consumes the transaction once, exchanges the authorization code, and validates the ID token signature, issuer, audience, expiry and nonce.
+5. The API creates a random opaque session token, stores only its SHA-256 hash, sets the HttpOnly session cookie, and redirects to `AUTH_FRONTEND_URL`.
+
+### Session behavior
+
+- Default session lifetime is 12 hours; configure `AUTH_SESSION_TTL_SECONDS` between 300 seconds and 7 days.
+- Sessions are fixed-expiry in this stage. They are not silently extended or rotated.
+- Every protected cookie-authenticated request revalidates the session against PostgreSQL. Revocation therefore takes effect on the next request.
+- Unsafe cookie-authenticated methods require an exact `Origin` match in `CORS_ORIGINS`; CORS allows credentials only for configured origins.
+- `POST /api/v1/auth/logout` revokes the current browser session. `POST /api/v1/auth/sessions/revoke-all` revokes all active browser sessions.
+- Existing Bearer-token authentication remains supported. Identity-provider access-token revocation and global IdP logout are outside this session store.
+
+### Required environment settings
+
+Configure these values on the API server only. Never put the client secret or encryption key in a `VITE_*` variable.
+
+| Variable | Purpose |
+|---|---|
+| `OIDC_ISSUER_URL` | Exact OIDC issuer identifier |
+| `OIDC_AUDIENCE` | Expected audience for existing API Bearer tokens |
+| `OIDC_JWKS_URL` | Trusted signing-key endpoint |
+| `OIDC_CLIENT_ID` | OIDC browser client ID |
+| `OIDC_CLIENT_SECRET` | Optional for public PKCE clients; required for Basic/Post client authentication |
+| `OIDC_CLIENT_AUTH_METHOD` | `client_secret_basic`, `client_secret_post`, or `none` |
+| `OIDC_REDIRECT_URI` | Exact API callback URI registered with the identity provider |
+| `AUTH_FRONTEND_URL` | Frontend destination after successful login; origin must be in `CORS_ORIGINS` |
+| `AUTH_SESSION_TTL_SECONDS` | Fixed browser session lifetime |
+| `SESSION_COOKIE_SECURE` | Must be `true` in production |
+| `APP_ENCRYPTION_KEY` | Base64-encoded 32-byte key used to encrypt PKCE transaction secrets |
+
+For local development, configure the identity provider callback as `http://localhost:8787/api/v1/auth/oidc/callback`, frontend origin as `http://localhost:5173`, and keep `SESSION_COOKIE_SECURE=false`. For production, all public endpoints and the frontend must use HTTPS.
+
 ## Explicitly not included
 
 - Login page, OIDC authorization-code/PKCE callback, or a selected production identity provider.
@@ -95,4 +142,4 @@ Migration: `server/migrations/002_workspace_access_management.sql`.
 - Frontend Access Management screen wiring; the current frontend remains localStorage-backed.
 - Granular per-feature Member permissions.
 
-Do not treat this branch as a complete production authentication release. Configure and review the identity provider, verified-email claim behavior, session model, email delivery, deployment secrets and frontend integration before inviting real team members.
+Do not treat this branch as a complete production authentication release. Configure and review the identity provider, exact callback URL, verified-email claim behavior, deployment secrets, frontend integration, email delivery and operational monitoring before inviting real team members.
