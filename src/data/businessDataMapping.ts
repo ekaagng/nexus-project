@@ -91,6 +91,9 @@ export function serializeBusinessRecord(
   value: BusinessRecord | Record<string, unknown>
 ): Record<string, unknown> {
   const record = { ...(value as Record<string, unknown>) };
+  for (const field of ['campaignId', 'publishDate', 'endDate']) {
+    if (record[field] === '') record[field] = null;
+  }
   const moneyFields: Partial<Record<BusinessDataKey, string[]>> = {
     campaigns: ['targetRevenue', 'plannedBudget'],
     expenses: ['amount'],
