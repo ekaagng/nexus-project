@@ -3,7 +3,7 @@
 **Baseline:** PRD NEXUS v0.3 · Nocturne / Midnight Observatory  
 **Current implementation:** React/Vite demo frontend + PostgreSQL/Fastify backend foundations.
 
-The frontend still runs as a local demo by default. Backend foundations add a workspace-scoped API, OIDC token verification, PostgreSQL tenant isolation, encrypted-secret storage primitives, normalized integration contracts, sync-job metadata and Owner-managed workspace access. Provider APIs and production browser sessions are not connected.
+The frontend still runs as a local demo by default. Backend foundations add a workspace-scoped API, OIDC token verification and Authorization Code + PKCE login, PostgreSQL-backed opaque browser sessions, PostgreSQL tenant isolation, encrypted-secret storage primitives, normalized integration contracts, sync-job metadata and Owner-managed workspace access. Provider APIs and production browser sessions are not connected.
 
 ## Frontend already implemented
 
@@ -29,6 +29,9 @@ The frontend still runs as a local demo by default. Backend foundations add a wo
 The `feat/authentication-management` child branch adds:
 
 - Owner-only member and invitation management endpoints.
+- Provider-neutral OIDC Authorization Code + PKCE login flow with state and nonce validation.
+- Opaque browser sessions stored as SHA-256 hashes, fixed expiry, per-request revalidation, logout and per-session/revoke-all controls.
+- HttpOnly/SameSite cookies, production Secure-cookie enforcement, exact-Origin CSRF validation and credentialed CORS limited to configured origins.
 - One-time 256-bit invitation tokens; only SHA-256 token hashes are stored.
 - Seven-day invitation expiry and a database-reserved seat for every pending invite.
 - Verified-email matching during invitation acceptance.
@@ -78,7 +81,7 @@ No Meta Ads, Scalev, Lynk.id, Instagram, TikTok or YouTube provider adapter is r
    - `http://localhost:8787/health/live`
    - `http://localhost:8787/health/ready`
 
-The existing frontend uses localStorage key `nexus.workspace.v03`; it is not yet wired to these API endpoints. Authenticated routes return an explicit 503 until OIDC settings are configured. Do not enable fake local authentication.
+The existing frontend uses localStorage key `nexus.workspace.v03`; it is not yet wired to `/api/v1/auth/session`, the login callback, or workspace APIs. Browser login requires the OIDC client settings and `APP_ENCRYPTION_KEY`; do not enable fake local authentication.
 
 ## Database security requirement
 
