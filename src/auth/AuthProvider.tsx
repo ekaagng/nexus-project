@@ -243,12 +243,12 @@ function WorkspaceSetup({ onCreated }: { onCreated: (workspace: WorkspaceSummary
           ) : (
             <label className="field">
               <span>Invitation token</span>
-              <textarea value={invitationToken} onChange={event => setInvitationToken(event.target.value)} rows={3} placeholder="Paste the one-time token from your workspace Owner" required />
+              <textarea value={invitationToken} onChange={event => setInvitationToken(event.target.value.trim())} rows={3} minLength={43} maxLength={43} placeholder="Paste the 43-character token from your workspace Owner" required />
             </label>
           )}
           {error && <p className="auth-inline-error" role="alert">{error}</p>}
           {success && <p className="auth-inline-success" role="status">{success}</p>}
-          <button className="btn btn-primary btn-block" type="submit" disabled={busy || (mode === 'create' ? workspaceName.trim().length < 2 : invitationToken.trim().length < 20)}>
+          <button className="btn btn-primary btn-block" type="submit" disabled={busy || (mode === 'create' ? workspaceName.trim().length < 2 : invitationToken.trim().length !== 43)}>
             {busy ? 'Processing…' : mode === 'create' ? 'Create workspace' : 'Accept invitation'}
           </button>
         </form>
