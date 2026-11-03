@@ -232,7 +232,7 @@ UPDATE public.auth_sessions
  WHERE session_hash = repeat('f', 64)
    AND user_id = 'ci-user-a';
 
-DO $
+DO $auth_check$
 BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM public.auth_sessions
@@ -249,6 +249,6 @@ BEGIN
     RAISE EXCEPTION 'Runtime role could not write authentication audit events';
   END IF;
 END;
-$;
+$auth_check$;
 
 ROLLBACK;
