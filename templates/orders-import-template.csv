@@ -1,0 +1,3 @@
+order_id,source,order_date,status,amount,utm
+ORDER-EXAMPLE-001,Scalev,2026-11-02,Paid,99000,instagram_bio
+ORDER-EXAMPLE-002,Lynk.id,2026-11-02,Refunded,149000,creator_code
