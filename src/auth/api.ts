@@ -69,7 +69,7 @@ const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, ''
 export async function apiRequest<T>(
   path: string,
   options: {
-    method?: 'GET' | 'POST' | 'DELETE';
+    method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
     body?: unknown;
     headers?: Record<string, string>;
     signal?: AbortSignal;
