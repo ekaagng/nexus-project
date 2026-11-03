@@ -92,6 +92,20 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
   }
 
   const corsOrigins = value.CORS_ORIGINS.split(',').map((origin) => origin.trim()).filter(Boolean);
+  if (corsOrigins.includes('*')) {
+    throw new Error('CORS_ORIGINS cannot contain * when credentialed browser sessions are enabled.');
+  }
+  for (const origin of corsOrigins) {
+    let parsedOrigin: URL;
+    try {
+      parsedOrigin = new URL(origin);
+    } catch {
+      throw new Error('Each CORS_ORIGINS entry must be an absolute origin.');
+    }
+    if (!['http:', 'https:'].includes(parsedOrigin.protocol) || parsedOrigin.origin !== origin) {
+      throw new Error('Each CORS_ORIGINS entry must contain only an HTTP(S) origin without a path.');
+    }
+  }
   const authFrontendUrl = value.AUTH_FRONTEND_URL ?? corsOrigins[0] ?? 'http://localhost:5173';
   let authFrontendOrigin: string;
   try {
@@ -108,6 +122,12 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
     }
     if (value.OIDC_REDIRECT_URI && new URL(value.OIDC_REDIRECT_URI).protocol !== 'https:') {
       throw new Error('OIDC_REDIRECT_URI must use HTTPS in production.');
+    }
+    if (value.OIDC_ISSUER_URL && new URL(value.OIDC_ISSUER_URL).protocol !== 'https:') {
+      throw new Error('OIDC_ISSUER_URL must use HTTPS in production.');
+    }
+    if (value.OIDC_JWKS_URL && new URL(value.OIDC_JWKS_URL).protocol !== 'https:') {
+      throw new Error('OIDC_JWKS_URL must use HTTPS in production.');
     }
   }
 
