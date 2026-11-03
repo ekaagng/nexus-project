@@ -2,11 +2,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   changedBusinessRecordFields,
-  createEmptyWorkspaceData,
   deserializeBusinessRecord,
   parseLegacyWorkspace,
   serializeBusinessRecord
 } from './businessDataMapping.js';
+import { createEmptyWorkspaceData } from '../domain.js';
 
 test('business data serialization sends exact decimal strings for monetary values', () => {
   const serialized = serializeBusinessRecord('campaigns', {
