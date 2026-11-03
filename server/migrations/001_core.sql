@@ -187,9 +187,7 @@ CREATE TABLE orders (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (workspace_id, provider, external_order_id),
   FOREIGN KEY (workspace_id, connection_id)
-    REFERENCES integration_connections(workspace_id, id) ON DELETE SET NULL (connection_id),
-  FOREIGN KEY (workspace_id, import_job_id)
-    REFERENCES sync_jobs(workspace_id, id) ON DELETE SET NULL (import_job_id)
+    REFERENCES integration_connections(workspace_id, id) ON DELETE SET NULL (connection_id)
 );
 CREATE INDEX orders_workspace_date_idx ON orders(workspace_id, placed_at DESC);
 CREATE INDEX orders_workspace_campaign_idx ON orders(workspace_id, internal_campaign_id);
@@ -297,7 +295,9 @@ CREATE TABLE source_lineage (
   imported_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   synced_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   FOREIGN KEY (workspace_id, connection_id)
-    REFERENCES integration_connections(workspace_id, id) ON DELETE SET NULL (connection_id)
+    REFERENCES integration_connections(workspace_id, id) ON DELETE SET NULL (connection_id),
+  FOREIGN KEY (workspace_id, import_job_id)
+    REFERENCES sync_jobs(workspace_id, id) ON DELETE SET NULL (import_job_id)
 );
 CREATE INDEX source_lineage_entity_idx ON source_lineage(workspace_id, entity_type, entity_id);
 CREATE UNIQUE INDEX source_lineage_connected_record_unique
