@@ -26,6 +26,7 @@ Protected routes accept either `Authorization: Bearer <OIDC access token>` or th
 | DELETE | `/api/v1/workspaces/invitations/:invitationId` | Owner | Revoke a pending invitation |
 | DELETE | `/api/v1/workspaces/members/:memberUserId` | Owner | Revoke an active Member |
 | POST | `/api/v1/workspaces/invitations/accept` | Authenticated invitee | Accept an invitation matching the verified token email |
+| GET | `/api/v1/auth/oidc/status` | Public | Report whether required OIDC login configuration is present (no secrets returned) |
 | GET | `/api/v1/auth/oidc/start` | Public | Start OIDC Authorization Code + PKCE login |
 | GET | `/api/v1/auth/oidc/callback` | OIDC callback | Verify state, exchange code, validate ID token, create session |
 | GET | `/api/v1/auth/session` | Authenticated | Return the current identity and auth method |
@@ -134,12 +135,26 @@ Configure these values on the API server only. Never put the client secret or en
 
 For local development, configure the identity provider callback as `http://localhost:8787/api/v1/auth/oidc/callback`, frontend origin as `http://localhost:5173`, and keep `SESSION_COOKIE_SECURE=false`. For production, all public endpoints and the frontend must use HTTPS. `SameSite=Lax` means the browser frontend and API should share the same registrable site; unrelated frontend/API domains require an explicit cookie deployment decision.
 
+## Frontend integration
+
+The React app now uses the server-owned session as its authentication gate:
+
+- On startup it checks `GET /api/v1/auth/session`. A 401 shows the sign-in screen; network/server failures show a retry state.
+- The sign-in action navigates to `/api/v1/auth/oidc/start`. It does not store an access token in browser storage.
+- `GET /api/v1/workspaces` populates the authenticated user's workspace selector. A first-time account can create a workspace or accept a one-time invitation.
+- The account menu reads `GET /api/v1/auth/sessions` and supports single-session revoke, revoke-all and logout.
+- The Owner-only Access Management page uses the workspace member/invitation endpoints. It shows an invitation token once, with manual secure delivery; there is no email sender.
+- Existing campaign, content, Ads and other operational demo records remain browser-local and are not yet server-backed. The signed-in UI labels this explicitly. The local cache key is namespaced by workspace ID.
+- The service worker excludes `/api/*` responses from caching. Authentication and workspace API responses must stay network-only.
+
+Configure `VITE_API_BASE_URL=http://localhost:8787` in the frontend `.env` for the standard local split-port setup. Its browser origin must match the server's `CORS_ORIGINS`. Keep the frontend and API on the same site in production so the `SameSite=Lax` session cookie is sent.
+
 ## Explicitly not included
 
-- React login screen and wiring of the existing frontend to `/api/v1/auth/session`, workspace APIs, and Access Management endpoints; the current frontend remains localStorage-backed.
+- Server-backed campaign/brief/task/content/Ads/KOL/sales/budget records and removal of all local demo-data behavior.
 - Selection/registration of a production identity provider, provider-specific consent configuration, and global IdP logout.
 - Automatic browser-session renewal/rotation and account deactivation/suspension.
 - Email delivery, invitation deep-link UI, and resend-email integration.
 - Granular per-feature Member permissions.
 
-Do not treat this branch as a complete production authentication release. Configure and review the identity provider, exact callback URL, verified-email claim behavior, deployment secrets, frontend integration, email delivery and operational monitoring before inviting real team members.
+Do not treat this branch as a complete production authentication release. Configure and review the identity provider, exact callback URL, verified-email claim behavior, deployment secrets, API cookie/site topology, operational monitoring and server-side business-data migration before inviting real team members.
