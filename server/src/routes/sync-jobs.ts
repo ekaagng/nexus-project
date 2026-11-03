@@ -1,4 +1,4 @@
-import type { FastifyInstance, FastifyRequest } from 'fastify';
+import type { FastifyInstance, FastifyRequest, preHandlerHookHandler } from 'fastify';
 import { z } from 'zod';
 import type { Pool } from 'pg';
 import { connectorRegistry } from '../connectors/registry.js';
@@ -7,11 +7,16 @@ import { getWorkspaceHeader, withWorkspaceContext } from '../db.js';
 import { AppError } from '../errors.js';
 import type { AuthenticatedUser } from '../auth/types.js';
 
+const isCalendarDate = (value: string) => {
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+};
+
 const createJobSchema = z.object({
   connectionId: z.string().uuid(),
   resource: z.enum(['orders', 'ad_performance_daily', 'social_account_daily_metrics', 'content_performance_snapshots']),
-  periodStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  periodEnd: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  periodStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(isCalendarDate),
+  periodEnd: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(isCalendarDate),
   idempotencyKey: z.string().min(8).max(180)
 }).refine((value) => value.periodStart < value.periodEnd, {
   message: 'periodEnd must be after periodStart',
@@ -23,7 +28,7 @@ function requireUser(request: FastifyRequest): AuthenticatedUser {
   return request.authUser;
 }
 
-export async function registerSyncJobRoutes(app: FastifyInstance, pool: Pool, authenticate: (request: FastifyRequest) => Promise<void>): Promise<void> {
+export async function registerSyncJobRoutes(app: FastifyInstance, pool: Pool, authenticate: preHandlerHookHandler): Promise<void> {
   app.get('/api/v1/sync-jobs', { preHandler: authenticate }, async (request) => {
     const user = requireUser(request);
     const workspaceId = getWorkspaceHeader(request.headers['x-workspace-id']);
