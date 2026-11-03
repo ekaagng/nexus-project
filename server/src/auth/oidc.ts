@@ -1,4 +1,4 @@
-import { createRemoteJWKSet, jwtVerify, type RemoteJWKSet } from 'jose';
+import { createRemoteJWKSet, jwtVerify } from 'jose';
 import type { AppConfig } from '../config.js';
 import { AppError } from '../errors.js';
 import type { AuthenticatedUser } from './types.js';
@@ -14,7 +14,7 @@ export function createTokenVerifier(config: AppConfig): TokenVerifier {
 
   const issuer = config.oidcIssuerUrl;
   const audience = config.oidcAudience;
-  const jwks: RemoteJWKSet = createRemoteJWKSet(new URL(config.oidcJwksUrl));
+  const jwks = createRemoteJWKSet(new URL(config.oidcJwksUrl));
 
   return async (token) => {
     try {
