@@ -8,6 +8,38 @@ INSERT INTO public.workspace_members (workspace_id, user_id, role, status)
 VALUES ('10000000-0000-4000-8000-000000000001', 'ci-user-a', 'owner', 'active');
 SELECT set_config('nexus.workspace_id', '10000000-0000-4000-8000-000000000001', TRUE);
 
+-- Business records are stored in relational tables and are accessible inside their workspace only.
+INSERT INTO public.campaigns (
+  workspace_id, id, name, objective, owner, start_date, end_date,
+  target_revenue, planned_budget, status, channels, created_by
+) VALUES (
+  '10000000-0000-4000-8000-000000000001',
+  'CAM-RLS-0001',
+  'RLS isolation campaign',
+  'Sales',
+  'ci-user-a',
+  DATE '2026-11-01',
+  DATE '2026-11-30',
+  1000000,
+  250000,
+  'Active',
+  ARRAY['Meta Ads'],
+  'ci-user-a'
+);
+INSERT INTO public.tasks (
+  workspace_id, id, title, assignee, priority, status, due_date, campaign_id, created_by
+) VALUES (
+  '10000000-0000-4000-8000-000000000001',
+  'TSK-RLS-0001',
+  'RLS tenant task',
+  'ci-user-a',
+  'High',
+  'To Do',
+  DATE '2026-11-10',
+  'CAM-RLS-0001',
+  'ci-user-a'
+);
+
 -- Owner may add four more seats. Active + invited seats are capped at five.
 INSERT INTO public.workspace_members (workspace_id, user_id, role, status)
 VALUES
@@ -195,8 +227,9 @@ VALUES ('20000000-0000-4000-8000-000000000002', 'ci-user-b', 'owner', 'active');
 SELECT set_config('nexus.user_id', 'ci-user-a', TRUE);
 SELECT set_config('nexus.workspace_id', '20000000-0000-4000-8000-000000000002', TRUE);
 
-DO $$
+DO $
 DECLARE visible_members INTEGER;
+DECLARE visible_campaigns INTEGER;
 DECLARE rejected BOOLEAN := FALSE;
 BEGIN
   SELECT COUNT(*) INTO visible_members
@@ -207,6 +240,45 @@ BEGIN
     RAISE EXCEPTION 'Tenant A can read tenant B workspace members';
   END IF;
 
+  SELECT COUNT(*) INTO visible_campaigns
+  FROM public.campaigns
+  WHERE workspace_id = '20000000-0000-4000-8000-000000000002';
+
+  IF visible_campaigns <> 0 THEN
+    RAISE EXCEPTION 'Tenant A can read tenant B business data';
+  END IF;
+
+  BEGIN
+    INSERT INTO public.campaigns (
+      workspace_id, id, name, objective, owner, start_date, end_date,
+      target_revenue, planned_budget, status, channels, created_by
+    ) VALUES (
+      '20000000-0000-4000-8000-000000000002',
+      'CAM-CROSS-TENANT',
+      'Should be blocked',
+      'Sales',
+      'ci-user-b',
+      DATE '2026-11-01',
+      DATE '2026-11-30',
+      1000000,
+      250000,
+      'Active',
+      ARRAY['Meta Ads'],
+      'ci-user-a'
+    );
+  EXCEPTION WHEN insufficient_privilege THEN
+    rejected := TRUE;
+  END;
+
+  IF NOT rejected THEN
+    RAISE EXCEPTION 'Tenant A cross-tenant business-data write was not rejected';
+  END IF;
+END;
+$;
+
+DO $
+DECLARE rejected BOOLEAN := FALSE;
+BEGIN
   BEGIN
     INSERT INTO public.audit_logs (workspace_id, actor_user_id, action)
     VALUES ('20000000-0000-4000-8000-000000000002', 'ci-user-a', 'cross-tenant-write-test');
@@ -215,10 +287,10 @@ BEGIN
   END;
 
   IF NOT rejected THEN
-    RAISE EXCEPTION 'Tenant A cross-tenant write was not rejected';
+    RAISE EXCEPTION 'Tenant A cross-tenant audit write was not rejected';
   END IF;
 END;
-$$;
+$;
 
 -- Runtime-role session persistence and revocation permissions.
 INSERT INTO public.auth_sessions (session_hash, user_id, issuer, email, email_verified, expires_at)
