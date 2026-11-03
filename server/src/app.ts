@@ -1,4 +1,4 @@
-import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
+import Fastify, { type FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
@@ -21,7 +21,6 @@ export async function buildApp(config: AppConfig, pool: Pool): Promise<FastifyIn
 
   app.decorateRequest('authUser', null);
   const authenticate = createAuthenticate(createTokenVerifier(config));
-  const authenticateHook = async (request: FastifyRequest) => authenticate(request, undefined as never);
 
   await app.register(cors, {
     origin: config.corsOrigins,
@@ -48,9 +47,9 @@ export async function buildApp(config: AppConfig, pool: Pool): Promise<FastifyIn
   });
 
   await registerHealthRoutes(app, pool);
-  await registerWorkspaceRoutes(app, pool, authenticateHook);
-  await registerIntegrationRoutes(app, pool, authenticateHook);
-  await registerSyncJobRoutes(app, pool, authenticateHook);
+  await registerWorkspaceRoutes(app, pool, authenticate);
+  await registerIntegrationRoutes(app, pool, authenticate);
+  await registerSyncJobRoutes(app, pool, authenticate);
 
   app.addHook('onClose', async () => {
     await pool.end();
