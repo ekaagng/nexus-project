@@ -27,7 +27,7 @@ async function main(): Promise<void> {
     for (const name of migrations) {
       const exists = await pool.query('SELECT 1 FROM nexus_schema_migrations WHERE migration_name = $1', [name]);
       if (exists.rowCount) {
-        process.stdout.write(`skip ${name} (already applied)\\n`);
+        process.stdout.write("skip " + name + " (already applied)" + String.fromCharCode(10));
         continue;
       }
 
@@ -38,7 +38,7 @@ async function main(): Promise<void> {
         await client.query(sql);
         await client.query('INSERT INTO nexus_schema_migrations (migration_name) VALUES ($1)', [name]);
         await client.query('COMMIT');
-        process.stdout.write(`applied ${name}\\n`);
+        process.stdout.write("applied " + name + String.fromCharCode(10));
       } catch (error) {
         await client.query('ROLLBACK').catch(() => undefined);
         throw error;
@@ -52,6 +52,6 @@ async function main(): Promise<void> {
 }
 
 void main().catch((error: unknown) => {
-  process.stderr.write(`Migration failed: ${error instanceof Error ? error.message : 'unknown error'}\\n`);
+  process.stderr.write("Migration failed: " + (error instanceof Error ? error.message : 'unknown error') + String.fromCharCode(10));
   process.exitCode = 1;
 });
