@@ -30,14 +30,14 @@ function requireUser(request: FastifyRequest): AuthenticatedUser {
   return request.authUser;
 }
 
-async function expirePendingInvitations(client: PoolClient, workspaceId: string): Promise<void> {
-  const expired = await client.query<{ reserved_user_id: string }>(
+async function expirePendingInvitations(client: PoolClient, workspaceId: string, actorUserId: string): Promise<void> {
+  const expired = await client.query<{ id: string; email: string; reserved_user_id: string }>(
     `UPDATE workspace_invitations
         SET status = 'expired', updated_at = NOW()
       WHERE workspace_id = $1::uuid
         AND status = 'pending'
         AND expires_at <= NOW()
-      RETURNING reserved_user_id`,
+      RETURNING id, email, reserved_user_id`,
     [workspaceId]
   );
 
@@ -49,6 +49,12 @@ async function expirePendingInvitations(client: PoolClient, workspaceId: string)
           AND user_id = $2
           AND status = 'invited'`,
       [workspaceId, row.reserved_user_id]
+    );
+    await client.query(
+      `INSERT INTO audit_logs (workspace_id, actor_user_id, action, entity_type, entity_id, metadata)
+       VALUES ($1::uuid, $2, 'workspace.invitation.expired', 'workspace_invitation', $3,
+               jsonb_build_object('email', $4))`,
+      [workspaceId, actorUserId, row.id, row.email]
     );
   }
 }
@@ -63,7 +69,7 @@ async function withOwnerContext<T>(
     if (role !== 'owner') {
       throw new AppError(403, 'owner_access_required', 'Only the workspace Owner can manage access.');
     }
-    await expirePendingInvitations(client, workspaceId);
+    await expirePendingInvitations(client, workspaceId, user.userId);
     return operation(client);
   });
 }
@@ -183,6 +189,7 @@ export async function registerWorkspaceAccessRoutes(
         return inserted.rows[0];
       });
 
+      reply.header('Cache-Control', 'no-store').header('Pragma', 'no-cache');
       return reply.code(201).send({
         invitation,
         invitationToken: secret.token,
@@ -206,14 +213,14 @@ export async function registerWorkspaceAccessRoutes(
     const tokenHash = hashInvitationToken(parsed.data.token);
     try {
       const accepted = await withUserContext(pool, user.userId, async (client) => {
-        const result = await client.query<{ workspace_id: string }>(
+        const result = await client.query<{ workspace_id: string | null }>(
           'SELECT nexus_private.accept_workspace_invitation($1, $2, $3) AS workspace_id',
           [tokenHash, user.userId, user.email]
         );
         return result.rows[0]?.workspace_id;
       });
       if (!accepted) {
-        throw new AppError(500, 'invitation_acceptance_failed', 'The invitation could not be accepted.');
+        throw new AppError(400, 'workspace_invitation_invalid_or_expired', 'The invitation is invalid or expired.');
       }
       return reply.code(200).send({ accepted: true, workspaceId: accepted });
     } catch (error) {
