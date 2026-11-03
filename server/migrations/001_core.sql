@@ -1,5 +1,3 @@
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
-
 CREATE TABLE IF NOT EXISTS nexus_schema_migrations (
   migration_name TEXT PRIMARY KEY,
   applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -26,23 +24,25 @@ CREATE TABLE workspace_members (
 );
 CREATE INDEX workspace_members_user_status_idx ON workspace_members(user_id, status);
 
-CREATE OR REPLACE FUNCTION nexus_is_workspace_member(p_user_id TEXT, p_workspace_id UUID)
+CREATE SCHEMA IF NOT EXISTS nexus_private;
+
+CREATE OR REPLACE FUNCTION nexus_private.is_workspace_member(p_user_id TEXT, p_workspace_id UUID)
 RETURNS BOOLEAN
 LANGUAGE SQL STABLE SECURITY DEFINER
-SET search_path = public, pg_temp
+SET search_path = ''
 AS $$
   SELECT COALESCE(EXISTS (
-    SELECT 1 FROM workspace_members wm
+    SELECT 1 FROM public.workspace_members wm
     WHERE wm.workspace_id = p_workspace_id
       AND wm.user_id = p_user_id
       AND wm.status = 'active'
   ), FALSE);
 $$;
 
-CREATE OR REPLACE FUNCTION nexus_workspace_role(p_user_id TEXT, p_workspace_id UUID)
+CREATE OR REPLACE FUNCTION nexus_private.workspace_role(p_user_id TEXT, p_workspace_id UUID)
 RETURNS TEXT
 LANGUAGE SQL STABLE SECURITY DEFINER
-SET search_path = public, pg_temp
+SET search_path = ''
 AS $$
   SELECT wm.role FROM workspace_members wm
   WHERE wm.workspace_id = p_workspace_id
@@ -51,13 +51,13 @@ AS $$
   LIMIT 1;
 $$;
 
-CREATE OR REPLACE FUNCTION nexus_workspace_created_by(p_user_id TEXT, p_workspace_id UUID)
+CREATE OR REPLACE FUNCTION nexus_private.workspace_created_by(p_user_id TEXT, p_workspace_id UUID)
 RETURNS BOOLEAN
 LANGUAGE SQL STABLE SECURITY DEFINER
-SET search_path = public, pg_temp
+SET search_path = ''
 AS $$
   SELECT COALESCE(EXISTS (
-    SELECT 1 FROM workspaces w
+    SELECT 1 FROM public.workspaces w
     WHERE w.id = p_workspace_id AND w.created_by = p_user_id
   ), FALSE);
 $$;
@@ -286,37 +286,53 @@ CREATE TABLE audit_logs (
 );
 CREATE INDEX audit_logs_workspace_time_idx ON audit_logs(workspace_id, created_at DESC);
 
+
+-- The application role is deliberately not the table owner. Create nexus_app
+-- before applying this migration; run migrations as nexus_migrator.
+GRANT USAGE ON SCHEMA public TO nexus_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO nexus_app;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO nexus_app;
+
+GRANT USAGE ON SCHEMA nexus_private TO nexus_app;
+REVOKE ALL ON FUNCTION nexus_private.is_workspace_member(TEXT, UUID) FROM PUBLIC;
+REVOKE ALL ON FUNCTION nexus_private.workspace_role(TEXT, UUID) FROM PUBLIC;
+REVOKE ALL ON FUNCTION nexus_private.workspace_created_by(TEXT, UUID) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION nexus_private.is_workspace_member(TEXT, UUID) TO nexus_app;
+GRANT EXECUTE ON FUNCTION nexus_private.workspace_role(TEXT, UUID) TO nexus_app;
+GRANT EXECUTE ON FUNCTION nexus_private.workspace_created_by(TEXT, UUID) TO nexus_app;
+
 -- Workspace membership helpers are SECURITY DEFINER and must remain owned by the migration role.
 ALTER TABLE workspaces ENABLE ROW LEVEL SECURITY;
 ALTER TABLE workspace_members ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY workspaces_select_member ON workspaces
-  FOR SELECT USING (nexus_is_workspace_member(NULLIF(current_setting('nexus.user_id', TRUE), ''), id));
+  FOR SELECT USING (nexus_private.is_workspace_member(NULLIF(current_setting('nexus.user_id', TRUE), ''), id));
 CREATE POLICY workspaces_insert_self ON workspaces
   FOR INSERT WITH CHECK (created_by = NULLIF(current_setting('nexus.user_id', TRUE), ''));
 CREATE POLICY workspaces_update_admin ON workspaces
-  FOR UPDATE USING (nexus_workspace_role(NULLIF(current_setting('nexus.user_id', TRUE), ''), id) IN ('owner', 'admin'))
-  WITH CHECK (nexus_workspace_role(NULLIF(current_setting('nexus.user_id', TRUE), ''), id) IN ('owner', 'admin'));
+  FOR UPDATE USING (nexus_private.workspace_role(NULLIF(current_setting('nexus.user_id', TRUE), ''), id) IN ('owner', 'admin'))
+  WITH CHECK (nexus_private.workspace_role(NULLIF(current_setting('nexus.user_id', TRUE), ''), id) IN ('owner', 'admin'));
 
 CREATE POLICY workspace_members_select_scope ON workspace_members
   FOR SELECT USING (
     user_id = NULLIF(current_setting('nexus.user_id', TRUE), '')
-    OR nexus_is_workspace_member(NULLIF(current_setting('nexus.user_id', TRUE), ''), workspace_id)
+    OR nexus_private.is_workspace_member(NULLIF(current_setting('nexus.user_id', TRUE), ''), workspace_id)
   );
 CREATE POLICY workspace_members_insert_owner ON workspace_members
   FOR INSERT WITH CHECK (
     (
       user_id = NULLIF(current_setting('nexus.user_id', TRUE), '')
       AND role = 'owner'
-      AND nexus_workspace_created_by(NULLIF(current_setting('nexus.user_id', TRUE), ''), workspace_id)
+      AND nexus_private.workspace_created_by(NULLIF(current_setting('nexus.user_id', TRUE), ''), workspace_id)
     )
-    OR nexus_workspace_role(NULLIF(current_setting('nexus.user_id', TRUE), ''), workspace_id) = 'owner'
+    OR nexus_private.workspace_role(NULLIF(current_setting('nexus.user_id', TRUE), ''), workspace_id) = 'owner'
   );
 CREATE POLICY workspace_members_update_owner ON workspace_members
-  FOR UPDATE USING (nexus_workspace_role(NULLIF(current_setting('nexus.user_id', TRUE), ''), workspace_id) = 'owner')
-  WITH CHECK (nexus_workspace_role(NULLIF(current_setting('nexus.user_id', TRUE), ''), workspace_id) = 'owner');
+  FOR UPDATE USING (nexus_private.workspace_role(NULLIF(current_setting('nexus.user_id', TRUE), ''), workspace_id) = 'owner')
+  WITH CHECK (nexus_private.workspace_role(NULLIF(current_setting('nexus.user_id', TRUE), ''), workspace_id) = 'owner');
 CREATE POLICY workspace_members_delete_owner ON workspace_members
-  FOR DELETE USING (nexus_workspace_role(NULLIF(current_setting('nexus.user_id', TRUE), ''), workspace_id) = 'owner');
+  FOR DELETE USING (nexus_private.workspace_role(NULLIF(current_setting('nexus.user_id', TRUE), ''), workspace_id) = 'owner');
 
 DO $$
 DECLARE
@@ -338,10 +354,10 @@ BEGIN
     EXECUTE format(
       'CREATE POLICY tenant_scope ON %I USING (
         workspace_id = NULLIF(current_setting(''nexus.workspace_id'', TRUE), '''')::uuid
-        AND nexus_is_workspace_member(NULLIF(current_setting(''nexus.user_id'', TRUE), ''''), workspace_id)
+        AND nexus_private.is_workspace_member(NULLIF(current_setting(''nexus.user_id'', TRUE), ''''), workspace_id)
       ) WITH CHECK (
         workspace_id = NULLIF(current_setting(''nexus.workspace_id'', TRUE), '''')::uuid
-        AND nexus_is_workspace_member(NULLIF(current_setting(''nexus.user_id'', TRUE), ''''), workspace_id)
+        AND nexus_private.is_workspace_member(NULLIF(current_setting(''nexus.user_id'', TRUE), ''''), workspace_id)
       )',
       table_name
     );
