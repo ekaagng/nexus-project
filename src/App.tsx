@@ -277,7 +277,40 @@ function CreateModal({ kind, campaigns, onClose, onSave }: {
 }
 
 function App() {
-  const [data, setData] = useState<WorkspaceData>(() => loadWorkspace());
+  return <AuthProvider><WorkspaceProvider><AuthenticatedWorkspace /></WorkspaceProvider></AuthProvider>;
+}
+
+function AuthenticatedWorkspace() {
+  const { session, signOut } = useAuth();
+  const { workspace, workspaces, selectWorkspace } = useWorkspace();
+  return (
+    <WorkspaceApp
+      key={workspace.id}
+      user={session.user}
+      workspace={workspace}
+      workspaces={workspaces}
+      selectWorkspace={selectWorkspace}
+      onSignOut={signOut}
+    />
+  );
+}
+
+function WorkspaceApp({
+  user,
+  workspace,
+  workspaces,
+  selectWorkspace,
+  onSignOut
+}: {
+  user: AuthUser;
+  workspace: WorkspaceSummary;
+  workspaces: WorkspaceSummary[];
+  selectWorkspace: (id: string) => void;
+  onSignOut: () => Promise<void>;
+}) {
+  const workspaceStorageKey = STORAGE_KEY + ':' + workspace.id;
+  const isOwner = workspace.role === 'owner';
+  const [data, setData] = useState<WorkspaceData>(() => loadWorkspace(workspaceStorageKey));
   const [page, setPage] = useState<PageId>('overview');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
