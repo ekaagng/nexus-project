@@ -290,11 +290,16 @@ CREATE TABLE source_lineage (
   validation_state TEXT NOT NULL CHECK (validation_state IN ('valid', 'incomplete', 'rejected', 'unverified')),
   imported_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   synced_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE (workspace_id, provider, connection_id, source_record_id),
   FOREIGN KEY (workspace_id, connection_id)
     REFERENCES integration_connections(workspace_id, id) ON DELETE SET NULL (connection_id)
 );
 CREATE INDEX source_lineage_entity_idx ON source_lineage(workspace_id, entity_type, entity_id);
+CREATE UNIQUE INDEX source_lineage_connected_record_unique
+  ON source_lineage(workspace_id, provider, connection_id, source_record_id)
+  WHERE connection_id IS NOT NULL;
+CREATE UNIQUE INDEX source_lineage_manual_record_unique
+  ON source_lineage(workspace_id, provider, source_record_id)
+  WHERE connection_id IS NULL;
 
 CREATE TABLE audit_logs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
