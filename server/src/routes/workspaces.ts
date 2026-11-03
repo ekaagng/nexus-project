@@ -37,15 +37,19 @@ export async function registerWorkspaceRoutes(app: FastifyInstance, pool: Pool, 
     if (!parsed.success) throw new AppError(400, 'invalid_workspace_payload', 'Workspace name must contain 2–120 characters.');
     const workspaceId = randomUUID();
     const created = await withUserContext(pool, user.userId, async (client) => {
-      const workspace = await client.query(
-        `INSERT INTO workspaces (id, name, created_by) VALUES ($1::uuid, $2, $3)
-         RETURNING id, name, timezone, currency, created_at`,
+      await client.query(
+        `INSERT INTO workspaces (id, name, created_by) VALUES ($1::uuid, $2, $3)`,
         [workspaceId, parsed.data.name, user.userId]
       );
       await client.query(
         `INSERT INTO workspace_members (workspace_id, user_id, role, status)
          VALUES ($1::uuid, $2, 'owner', 'active')`,
         [workspaceId, user.userId]
+      );
+      const workspace = await client.query(
+        `SELECT id, name, timezone, currency, created_at
+         FROM workspaces WHERE id = $1::uuid`,
+        [workspaceId]
       );
       return workspace.rows[0];
     });
