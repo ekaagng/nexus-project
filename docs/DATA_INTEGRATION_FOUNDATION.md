@@ -76,7 +76,7 @@ All API routes except health endpoints require a Bearer access token. Workspace-
 
 ## 5. Local setup
 
-1. Install Node.js 20+ and PostgreSQL 15+ (the schema uses column-specific `ON DELETE SET NULL` foreign keys)..
+1. Install Node.js 20+ and PostgreSQL 15+ (the schema uses column-specific `ON DELETE SET NULL` foreign keys).
 2. Install dependencies with `npm install`.
 3. Copy `.env.example` to `.env` and fill in `DATABASE_URL`.
 4. Apply the schema using `npm run db:migrate`.
@@ -104,7 +104,7 @@ The API sets transaction-local `nexus.user_id` and `nexus.workspace_id` values. 
 ## 7. Environment variables
 
 - `DATABASE_URL`: runtime database connection.
-- `MIGRATION_DATABASE_URL`: optional schema-owner connection used only by migrations.
+- `MIGRATION_DATABASE_URL`: required schema-owner connection used only by migrations.
 - `DATABASE_SSL`: enable certificate-verified TLS for PostgreSQL.
 - `CORS_ORIGINS`: comma-separated frontend origins.
 - `OIDC_ISSUER_URL`, `OIDC_AUDIENCE`, `OIDC_JWKS_URL`: OIDC access-token verification settings.
