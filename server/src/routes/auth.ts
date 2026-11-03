@@ -78,7 +78,7 @@ function trustedEndpoint(value: string): URL {
 }
 
 async function loadDiscovery(issuer: string): Promise<OidcDiscovery> {
-  const discoveryUrl = trustedEndpoint(\`\${issuer.replace(/\\/+$/, '')}/.well-known/openid-configuration\`);
+  const discoveryUrl = trustedEndpoint(issuer.replace(/\/+$/, '') + '/.well-known/openid-configuration');
   let response: Response;
   try {
     response = await fetch(discoveryUrl, {
@@ -134,7 +134,7 @@ function createTokenRequest(
     const encodedClientSecret = encodeURIComponent(config.oidcClientSecret);
     return {
       body,
-      authorization: \`Basic \${Buffer.from(\`\${encodedClientId}:\${encodedClientSecret}\`).toString('base64')}\`
+      authorization: 'Basic ' + Buffer.from(encodedClientId + ':' + encodedClientSecret).toString('base64')
     };
   }
 
@@ -282,12 +282,12 @@ export async function registerAuthRoutes(
     const codeVerifier = randomBytes(32).toString('base64url');
     const stateHash = sha256(state);
     const vault = createTokenVault(settings.encryptionKey);
-    const verifierEnvelope = vault.encrypt(codeVerifier, \`oidc-pkce:\${stateHash}\`);
+    const verifierEnvelope = vault.encrypt(codeVerifier, 'oidc-pkce:' + stateHash);
     const codeChallenge = createHash('sha256').update(codeVerifier, 'utf8').digest('base64url');
 
     await pool.query('DELETE FROM public.auth_login_transactions WHERE expires_at <= NOW()');
     await pool.query(
-      'INSERT INTO public.auth_login_transactions (state_hash, nonce_hash, code_verifier_envelope, expires_at) VALUES ($1, $2, $3::jsonb, NOW() + INTERVAL \\'10 minutes\\')',
+      "INSERT INTO public.auth_login_transactions (state_hash, nonce_hash, code_verifier_envelope, expires_at) VALUES ($1, $2, $3::jsonb, NOW() + INTERVAL '10 minutes')",
       [stateHash, sha256(nonce), JSON.stringify(verifierEnvelope)]
     );
 
@@ -341,7 +341,7 @@ export async function registerAuthRoutes(
       }
 
       const codeVerifier = createTokenVault(settings.encryptionKey)
-        .decrypt(loginTransaction.code_verifier_envelope, \`oidc-pkce:\${stateHash}\`);
+        .decrypt(loginTransaction.code_verifier_envelope, 'oidc-pkce:' + stateHash);
       const discovery = await loadDiscovery(settings.issuer);
       const idToken = await exchangeAuthorizationCode(
         config,
