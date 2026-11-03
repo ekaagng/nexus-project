@@ -1,17 +1,26 @@
 import { z } from 'zod';
 
+const optionalEnvString = z.preprocess(
+  (value) => typeof value === 'string' && value.trim() === '' ? undefined : value,
+  z.string().optional()
+);
+const optionalEnvUrl = z.preprocess(
+  (value) => typeof value === 'string' && value.trim() === '' ? undefined : value,
+  z.string().url().optional()
+);
+
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   API_HOST: z.string().default('0.0.0.0'),
   API_PORT: z.coerce.number().int().min(1).max(65535).default(8787),
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
-  MIGRATION_DATABASE_URL: z.string().optional(),
+  MIGRATION_DATABASE_URL: optionalEnvString,
   DATABASE_SSL: z.enum(['true', 'false']).default('false'),
   CORS_ORIGINS: z.string().default('http://localhost:5173'),
-  OIDC_ISSUER_URL: z.string().url().optional(),
-  OIDC_AUDIENCE: z.string().min(1).optional(),
-  OIDC_JWKS_URL: z.string().url().optional(),
-  APP_ENCRYPTION_KEY: z.string().optional()
+  OIDC_ISSUER_URL: optionalEnvUrl,
+  OIDC_AUDIENCE: optionalEnvString,
+  OIDC_JWKS_URL: optionalEnvUrl,
+  APP_ENCRYPTION_KEY: optionalEnvString
 });
 
 export type AppConfig = {
