@@ -42,9 +42,11 @@ export async function upsertNormalizedOrders(
 ): Promise<{ processed: number }> {
   if (records.length === 0) return { processed: 0 };
 
+  const firstRecord = records[0];
+  if (!firstRecord) return { processed: 0 };
   const providers = new Set(records.map((record) => record.provider));
   if (providers.size !== 1) throw new Error('A single ingestion batch must contain one provider.');
-  const provider = records[0].provider;
+  const provider = firstRecord.provider;
 
   if (provider === 'manual' && connectionId !== null) {
     throw new Error('Manual imports must not be attached to a provider connection.');
