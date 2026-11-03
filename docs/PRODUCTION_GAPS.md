@@ -1,3 +1,5 @@
+> **Backend foundation update (2026-11-03):** The initial v0.3 status matrix below describes the original frontend-only baseline. A partial backend foundation has since been added on `feat/data-integration-foundation`; see [DATA_INTEGRATION_FOUNDATION.md](DATA_INTEGRATION_FOUNDATION.md). PostgreSQL schema, OIDC verification boundary, tenant-scoped API routes, encrypted-token utility and sync-job metadata are present in that branch. This does not mean production authentication, provider OAuth, background workers or live dashboard reads are complete.
+
 # NEXUS v0.3 — Implementation traceability & production gaps
 
 ## 1. Implemented in this baseline
