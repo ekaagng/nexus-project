@@ -13,7 +13,7 @@
     "build:server": "tsc -p server/tsconfig.json",
     "typecheck:server": "tsc -p server/tsconfig.json --noEmit",
     "db:migrate": "tsx server/src/migrate.ts",
-    "test:server": "tsx --test server/test/token-vault.test.ts server/test/normalization.test.ts server/test/config.test.ts server/test/invitation-token.test.ts server/test/auth-cookies.test.ts"
+    "test:server": "tsx --test server/test/token-vault.test.ts server/test/normalization.test.ts server/test/config.test.ts server/test/invitation-token.test.ts server/test/auth-cookies.test.ts server/test/auth-middleware.test.ts"
   },
   "dependencies": {
     "@fastify/cors": "^10.0.2",
