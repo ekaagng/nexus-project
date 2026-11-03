@@ -76,6 +76,12 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
   if (value.NODE_ENV === 'production' && !loginConfigured) {
     throw new Error('Production requires complete OIDC login configuration, including OIDC_CLIENT_ID and OIDC_REDIRECT_URI.');
   }
+  if (loginConfigured && !value.APP_ENCRYPTION_KEY) {
+    throw new Error('APP_ENCRYPTION_KEY is required when browser OIDC login is configured.');
+  }
+  if (loginConfigured && value.OIDC_CLIENT_AUTH_METHOD !== 'none' && !value.OIDC_CLIENT_SECRET) {
+    throw new Error('OIDC_CLIENT_SECRET is required unless OIDC_CLIENT_AUTH_METHOD=none.');
+  }
   if (value.NODE_ENV === 'production' && !value.APP_ENCRYPTION_KEY) {
     throw new Error('APP_ENCRYPTION_KEY is required in production.');
   }
