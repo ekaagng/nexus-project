@@ -1,4 +1,6 @@
-CREATE TABLE IF NOT EXISTS nexus_schema_migrations (
+SET LOCAL search_path TO public;
+
+CREATE TABLE IF NOT EXISTS public.nexus_schema_migrations (
   migration_name TEXT PRIMARY KEY,
   applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
