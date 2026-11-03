@@ -220,4 +220,35 @@ BEGIN
 END;
 $$;
 
+-- Runtime-role session persistence and revocation permissions.
+INSERT INTO public.auth_sessions (session_hash, user_id, issuer, email, email_verified, expires_at)
+VALUES (repeat('f', 64), 'ci-user-a', 'https://identity.example.com', 'ci-user-a@example.com', TRUE, NOW() + INTERVAL '1 hour');
+
+INSERT INTO public.auth_security_events (user_id, event_type)
+VALUES ('ci-user-a', 'login.succeeded');
+
+UPDATE public.auth_sessions
+   SET revoked_at = NOW()
+ WHERE session_hash = repeat('f', 64)
+   AND user_id = 'ci-user-a';
+
+DO $
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM public.auth_sessions
+    WHERE session_hash = repeat('f', 64)
+      AND revoked_at IS NOT NULL
+  ) THEN
+    RAISE EXCEPTION 'Runtime role could not persist/revoke a browser session';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM public.auth_security_events
+    WHERE user_id = 'ci-user-a'
+      AND event_type = 'login.succeeded'
+  ) THEN
+    RAISE EXCEPTION 'Runtime role could not write authentication audit events';
+  END IF;
+END;
+$;
+
 ROLLBACK;
