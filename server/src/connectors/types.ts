@@ -24,7 +24,8 @@ export type ConnectorContext = {
   idempotencyKey: string;
 };
 
-export type ConnectorSyncResult = {
+export type ConnectorSyncResult<TRecord = unknown> = {
+  records: TRecord[];
   cursor?: string;
   received: number;
   inserted: number;
@@ -33,9 +34,9 @@ export type ConnectorSyncResult = {
   completedAt: string;
 };
 
-export interface ProviderConnector {
+export interface ProviderConnector<TRecord = unknown> {
   readonly provider: ProviderId;
   readonly resources: readonly SyncResource[];
   testConnection(connectionId: string): Promise<{ ok: boolean; safeMessage?: string }>;
-  sync(resource: SyncResource, context: ConnectorContext): Promise<ConnectorSyncResult>;
+  sync(resource: SyncResource, context: ConnectorContext): Promise<ConnectorSyncResult<TRecord>>;
 }
