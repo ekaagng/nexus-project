@@ -86,7 +86,7 @@ CREATE TABLE integration_connections (
 CREATE INDEX integration_connections_workspace_idx ON integration_connections(workspace_id, provider, status);
 
 CREATE TABLE integration_secrets (
-  connection_id UUID PRIMARY KEY REFERENCES integration_connections(id) ON DELETE CASCADE,
+  connection_id UUID PRIMARY KEY,
   workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
   access_token_ciphertext BYTEA NOT NULL,
   access_token_iv BYTEA NOT NULL,
@@ -113,7 +113,7 @@ CREATE TABLE integration_secrets (
 CREATE TABLE sync_jobs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
-  connection_id UUID NOT NULL REFERENCES integration_connections(id) ON DELETE CASCADE,
+  connection_id UUID NOT NULL,
   provider TEXT NOT NULL,
   resource TEXT NOT NULL CHECK (resource IN ('orders', 'ad_performance_daily', 'social_account_daily_metrics', 'content_performance_snapshots')),
   status TEXT NOT NULL DEFAULT 'queued' CHECK (status IN ('queued', 'running', 'succeeded', 'partial', 'failed', 'cancelled')),
@@ -146,7 +146,7 @@ CREATE INDEX sync_jobs_workspace_idx ON sync_jobs(workspace_id, created_at DESC)
 
 CREATE TABLE sync_cursors (
   workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
-  connection_id UUID NOT NULL REFERENCES integration_connections(id) ON DELETE CASCADE,
+  connection_id UUID NOT NULL,
   resource TEXT NOT NULL,
   cursor_value TEXT,
   last_successful_sync_at TIMESTAMPTZ,
@@ -159,7 +159,7 @@ CREATE TABLE sync_cursors (
 CREATE TABLE orders (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
-  connection_id UUID REFERENCES integration_connections(id) ON DELETE SET NULL,
+  connection_id UUID,
   provider TEXT NOT NULL CHECK (provider IN ('scalev', 'lynk_id', 'manual')),
   external_order_id TEXT NOT NULL,
   placed_at TIMESTAMPTZ NOT NULL,
@@ -191,7 +191,7 @@ CREATE INDEX orders_workspace_campaign_idx ON orders(workspace_id, internal_camp
 CREATE TABLE ad_performance_daily (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
-  connection_id UUID NOT NULL REFERENCES integration_connections(id) ON DELETE CASCADE,
+  connection_id UUID NOT NULL,
   provider TEXT NOT NULL CHECK (provider IN ('meta_ads')),
   metric_date DATE NOT NULL,
   external_account_id TEXT NOT NULL,
@@ -222,7 +222,7 @@ CREATE INDEX ad_performance_workspace_date_idx ON ad_performance_daily(workspace
 CREATE TABLE social_account_daily_metrics (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
-  connection_id UUID NOT NULL REFERENCES integration_connections(id) ON DELETE CASCADE,
+  connection_id UUID NOT NULL,
   provider TEXT NOT NULL CHECK (provider IN ('instagram', 'tiktok', 'youtube')),
   metric_date DATE NOT NULL,
   external_account_id TEXT NOT NULL,
@@ -248,7 +248,7 @@ CREATE INDEX social_metrics_workspace_date_idx ON social_account_daily_metrics(w
 CREATE TABLE content_performance_snapshots (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
-  connection_id UUID NOT NULL REFERENCES integration_connections(id) ON DELETE CASCADE,
+  connection_id UUID NOT NULL,
   provider TEXT NOT NULL CHECK (provider IN ('instagram', 'tiktok', 'youtube')),
   metric_date DATE NOT NULL,
   external_account_id TEXT NOT NULL,
