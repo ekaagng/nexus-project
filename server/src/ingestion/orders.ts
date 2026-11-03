@@ -1,9 +1,9 @@
 import { z } from 'zod';
 import type { PoolClient } from 'pg';
 
-const decimalAmountSchema = z.string().regex(/^\\d{1,16}(?:\\.\\d{1,2})?$/);
+const decimalAmountSchema = z.string().regex(/^\d{1,16}(?:\.\d{1,2})?$/);
 
-const normalizedOrderSchema = z.object({
+export const normalizedOrderSchema = z.object({
   provider: z.enum(['scalev', 'lynk_id', 'manual']),
   externalOrderId: z.string().min(1).max(240),
   placedAt: z.string().datetime({ offset: true }),
@@ -44,9 +44,10 @@ export async function upsertNormalizedOrders(
 ): Promise<{ processed: number }> {
   if (records.length === 0) return { processed: 0 };
 
-  const firstRecord = records[0];
+  const normalizedRecords = records.map((record) => normalizedOrderSchema.parse(record));
+  const firstRecord = normalizedRecords[0];
   if (!firstRecord) return { processed: 0 };
-  const providers = new Set(records.map((record) => record.provider));
+  const providers = new Set(normalizedRecords.map((record) => record.provider));
   if (providers.size !== 1) throw new Error('A single ingestion batch must contain one provider.');
   const provider = firstRecord.provider;
 
@@ -69,9 +70,7 @@ export async function upsertNormalizedOrders(
   }
 
   let processed = 0;
-  for (const input of records) {
-    const record = normalizedOrderSchema.parse(input);
-    if (record.provider !== provider) throw new Error('Provider changed within the ingestion batch.');
+  for (const record of normalizedRecords) {
 
     const saved = await client.query<{ id: string }>(
       `INSERT INTO orders (
