@@ -10,6 +10,7 @@ import {
   acceptWorkspaceInvitation,
   ApiError,
   AuthSession,
+  apiRequest,
   beginOidcLogin,
   createWorkspace,
   getCurrentSession,
@@ -295,6 +296,12 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const workspace = workspaces.find(item => item.id === selectedId) || workspaces[0];
+  const value = useMemo<WorkspaceContextValue | null>(() => workspace ? ({
+    workspaces,
+    workspace,
+    selectWorkspace: setSelectedId,
+    refreshWorkspaces
+  }) : null, [workspaces, workspace, refreshWorkspaces]);
 
   if (loading) {
     return (
@@ -316,12 +323,6 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     return <WorkspaceSetup onCreated={handleCreated} />;
   }
 
-  const value = useMemo<WorkspaceContextValue>(() => ({
-    workspaces,
-    workspace,
-    selectWorkspace: setSelectedId,
-    refreshWorkspaces
-  }), [workspaces, workspace, refreshWorkspaces]);
-
+  if (!value) return null;
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;
 }
