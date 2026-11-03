@@ -97,7 +97,7 @@ CREATE ROLE nexus_app LOGIN PASSWORD 'replace-this-runtime-password';
 CREATE DATABASE nexus;
 GRANT CONNECT ON DATABASE nexus TO nexus_migrator, nexus_app;
 GRANT CREATE ON DATABASE nexus TO nexus_migrator;
-\\connect nexus
+\connect nexus
 GRANT CREATE ON SCHEMA public TO nexus_migrator;
 GRANT USAGE ON SCHEMA public TO nexus_app;
 ```
