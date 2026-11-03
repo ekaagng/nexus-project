@@ -89,12 +89,15 @@ The existing frontend remains on Vite port 5173. Its demo data is still localSto
 
 ## 6. Database role and RLS requirement
 
-Create separate roles before migrating (replace passwords with strong values):
+Connect to PostgreSQL as an administrator first. Create separate roles and a database before migrating (replace passwords with strong values; omit `CREATE DATABASE` if the database already exists):
 
 ```sql
 CREATE ROLE nexus_migrator LOGIN PASSWORD 'replace-this-migration-password';
 CREATE ROLE nexus_app LOGIN PASSWORD 'replace-this-runtime-password';
+CREATE DATABASE nexus;
 GRANT CONNECT ON DATABASE nexus TO nexus_migrator, nexus_app;
+GRANT CREATE ON DATABASE nexus TO nexus_migrator;
+\\connect nexus
 GRANT CREATE ON SCHEMA public TO nexus_migrator;
 GRANT USAGE ON SCHEMA public TO nexus_app;
 ```
