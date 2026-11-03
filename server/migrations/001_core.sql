@@ -281,7 +281,7 @@ CREATE INDEX content_metrics_workspace_date_idx ON content_performance_snapshots
 CREATE TABLE source_lineage (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
-  connection_id UUID REFERENCES integration_connections(id) ON DELETE SET NULL,
+  connection_id UUID,
   provider TEXT NOT NULL,
   entity_type TEXT NOT NULL CHECK (entity_type IN ('order', 'ad_performance_daily', 'social_account_daily_metrics', 'content_performance_snapshots')),
   entity_id UUID NOT NULL,
@@ -390,7 +390,7 @@ REVOKE ALL ON FUNCTION nexus_private.enforce_workspace_member_limit() FROM PUBLI
 GRANT EXECUTE ON FUNCTION nexus_private.enforce_workspace_member_limit() TO nexus_app;
 
 CREATE TRIGGER workspace_members_limit_active
-  BEFORE INSERT OR UPDATE OF workspace_id, status ON public.workspace_members
+  BEFORE INSERT OR UPDATE ON public.workspace_members
   FOR EACH ROW EXECUTE FUNCTION nexus_private.enforce_workspace_member_limit();
 
 CREATE POLICY workspace_members_select_scope ON workspace_members
