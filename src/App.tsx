@@ -548,16 +548,19 @@ function WorkspaceApp({
 
   const renderSidebar = (mobile = false) => <>
     <div className="brand-row"><div className="brand-mark">N</div><div><strong>NEXUS</strong><span>MARKETING INTELLIGENCE</span></div><button className="icon-btn drawer-close" onClick={()=>setDrawerOpen(false)} aria-label="Close menu"><Icon name="close"/></button></div>
-    <div className="workspace-chip"><span className="workspace-orb"/><div><strong>Daytoday Workspace</strong><small>Private workspace · Demo</small></div><Icon name="chevron" size={14}/></div>
+    <div className="workspace-chip"><span className="workspace-orb"/><div className="workspace-chip-copy"><strong>{workspace.name}</strong><small>{workspaces.length} workspace · {workspace.role === 'owner' ? 'Owner' : 'Member'}</small></div>{workspaces.length > 1 && <select className="workspace-switcher" aria-label="Switch workspace" value={workspace.id} onChange={event => selectWorkspace(event.target.value)}>{workspaces.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>}<Icon name="chevron" size={14}/></div>
     <nav className="side-nav" aria-label="Main navigation">
       {navGroups.map(group=><div className="nav-group" key={group.title}>
         <div className="nav-group-title">{group.title}</div>
-        {group.items.filter(item=>item.id!=='access'||profileRole==='Owner').map(item=><button key={item.id} className={`nav-item ${page===item.id?'active':''}`} onClick={()=>navigate(item.id)}>
+        {group.items.filter(item=>item.id!=='access'||isOwner).map(item=><button key={item.id} className={`nav-item ${page===item.id?'active':''}`} onClick={()=>navigate(item.id)}>
           <Icon name={item.icon}/><span>{item.label}</span>{item.id==='tasks' && overdueTasks.length>0 && <em>{overdueTasks.length}</em>}
         </button>)}
       </div>)}
     </nav>
-    <div className="sidebar-footer"><div className="sync-mini"><span className="pulse-dot"/><div><strong>{online?'Workspace online':'Offline snapshot'}</strong><small>Local cache · {new Date(data.updatedAt).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'})}</small></div></div><div className="sidebar-profile"><div className="avatar">{profileRole==='Owner'?'O':'M'}</div><div><strong>{profileRole==='Owner'?'Workspace Owner':'Workspace Member'}</strong><small>{profileRole} · Local demo mode</small></div><button className="icon-btn" onClick={()=>setProfileRole(r=>r==='Owner'?'Member':'Owner')} aria-label="Switch demo role"><Icon name="more"/></button></div></div>
+    <div className="sidebar-footer">
+      <div className="sync-mini"><span className="pulse-dot"/><div><strong>{online?'Workspace online':'Offline snapshot'}</strong><small>Local data · {new Date(data.updatedAt).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'})}</small></div></div>
+      <div className="sidebar-profile"><div className="avatar">{(user.email || user.id).slice(0,1).toUpperCase()}</div><div><strong>{user.email || 'Authenticated user'}</strong><small>{workspace.role === 'owner' ? 'Owner' : 'Member'} · Server verified</small></div></div>
+    </div>
   </>;
 
   const renderHeader = () => <header className="topbar">
