@@ -24,16 +24,51 @@ const normalizedOrderSchema = z.object({
 
 export type NormalizedOrder = z.infer<typeof normalizedOrderSchema>;
 
+const lineageUpdate = `
+  DO UPDATE SET entity_id = EXCLUDED.entity_id,
+                payload_hash = EXCLUDED.payload_hash,
+                import_job_id = EXCLUDED.import_job_id,
+                validation_state = EXCLUDED.validation_state,
+                imported_at = NOW(),
+                synced_at = NOW()
+`;
+
 export async function upsertNormalizedOrders(
   client: PoolClient,
   workspaceId: string,
-  connectionId: string,
+  connectionId: string | null,
   records: NormalizedOrder[],
   syncJobId?: string
 ): Promise<{ processed: number }> {
+  if (records.length === 0) return { processed: 0 };
+
+  const providers = new Set(records.map((record) => record.provider));
+  if (providers.size !== 1) throw new Error('A single ingestion batch must contain one provider.');
+  const provider = records[0].provider;
+
+  if (provider === 'manual' && connectionId !== null) {
+    throw new Error('Manual imports must not be attached to a provider connection.');
+  }
+  if (provider !== 'manual' && !connectionId) {
+    throw new Error('A provider connection is required for external order ingestion.');
+  }
+
+  if (connectionId) {
+    const connection = await client.query<{ provider: string }>(
+      `SELECT provider FROM integration_connections
+       WHERE id = $1::uuid AND workspace_id = $2::uuid`,
+      [connectionId, workspaceId]
+    );
+    if (connection.rows[0]?.provider !== provider) {
+      throw new Error('The order provider does not match the selected workspace connection.');
+    }
+  }
+
   let processed = 0;
   for (const input of records) {
     const record = normalizedOrderSchema.parse(input);
+    if (record.provider !== provider) throw new Error('Provider changed within the ingestion batch.');
+
     const saved = await client.query<{ id: string }>(
       `INSERT INTO orders (
         workspace_id, connection_id, provider, external_order_id, placed_at, status,
@@ -78,18 +113,17 @@ export async function upsertNormalizedOrders(
 
     const orderId = saved.rows[0]?.id;
     if (orderId) {
+      const conflictTarget = connectionId
+        ? `ON CONFLICT (workspace_id, provider, connection_id, source_record_id)
+           WHERE connection_id IS NOT NULL${lineageUpdate}`
+        : `ON CONFLICT (workspace_id, provider, source_record_id)
+           WHERE connection_id IS NULL${lineageUpdate}`;
       await client.query(
         `INSERT INTO source_lineage (
           workspace_id, connection_id, provider, entity_type, entity_id,
           source_record_id, payload_hash, import_job_id, validation_state
         ) VALUES ($1::uuid, $2::uuid, $3, 'order', $4::uuid, $5, $6, $7::uuid, 'valid')
-        ON CONFLICT (workspace_id, provider, connection_id, source_record_id)
-        DO UPDATE SET entity_id = EXCLUDED.entity_id,
-                      payload_hash = EXCLUDED.payload_hash,
-                      import_job_id = EXCLUDED.import_job_id,
-                      validation_state = EXCLUDED.validation_state,
-                      imported_at = NOW(),
-                      synced_at = NOW()`,
+        ${conflictTarget}`,
         [workspaceId, connectionId, record.provider, orderId, record.externalOrderId, record.payloadHash, syncJobId ?? null]
       );
     }
