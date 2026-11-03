@@ -15,7 +15,7 @@ export function createAuthenticate(
     const authorization = request.headers.authorization;
     if (authorization !== undefined) {
       const match = typeof authorization === 'string'
-        ? authorization.match(/^Bearer\\s+([^\\s]+)$/i)
+        ? authorization.match(/^Bearer\s+([^\s]+)$/i)
         : null;
       if (!match?.[1]) {
         throw new AppError(401, 'authentication_required', 'A valid Bearer access token is required.');
@@ -38,12 +38,7 @@ export function createAuthenticate(
       email_verified: boolean;
       expires_at: Date | string;
     }>(
-      `SELECT id, user_id, issuer, email, email_verified, expires_at
-         FROM public.auth_sessions
-        WHERE session_hash = $1
-          AND revoked_at IS NULL
-          AND expires_at > NOW()
-        LIMIT 1`,
+      'SELECT id, user_id, issuer, email, email_verified, expires_at FROM public.auth_sessions WHERE session_hash = $1 AND revoked_at IS NULL AND expires_at > NOW() LIMIT 1',
       [sessionHash]
     );
 
@@ -60,10 +55,7 @@ export function createAuthenticate(
     }
 
     await pool.query(
-      `UPDATE public.auth_sessions
-          SET last_seen_at = NOW()
-        WHERE id = $1::uuid
-          AND last_seen_at < NOW() - INTERVAL '5 minutes'`,
+      "UPDATE public.auth_sessions SET last_seen_at = NOW() WHERE id = $1::uuid AND last_seen_at < NOW() - INTERVAL '5 minutes'",
       [session.id]
     );
 
