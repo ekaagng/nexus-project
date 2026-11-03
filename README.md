@@ -69,7 +69,7 @@ The existing frontend uses localStorage key `nexus.workspace.v03`; it is not yet
 
 ## Database security requirement
 
-Run migrations with a role that owns the schema/tables. The API's `DATABASE_URL` must use a separate runtime role that does **not** own tables and does not have `BYPASSRLS`. PostgreSQL table owners bypass RLS unless forced, so using the migration owner as the API role defeats the tenant boundary.
+Create separate `nexus_migrator` and `nexus_app` PostgreSQL roles before migrating. Grant the migrator `CREATE` on schema `public`; grant the app role `USAGE` on schema `public`. Run migrations with `MIGRATION_DATABASE_URL` as `nexus_migrator`, and use `DATABASE_URL` as `nexus_app`. The migration grants the runtime role table DML permissions and access to narrowly scoped helper functions. The runtime role must **not** own tables and must not have `BYPASSRLS`. PostgreSQL table owners bypass RLS unless forced, so using the migration owner as the API role defeats the tenant boundary.
 
 The API sets `nexus.user_id` and `nexus.workspace_id` with transaction-local settings. Keep them transaction-scoped when using pooled connections.
 
