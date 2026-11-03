@@ -18,14 +18,14 @@ async function main(): Promise<void> {
   const migrationDirectory = join(dirname(fileURLToPath(import.meta.url)), '../migrations');
 
   try {
-    await pool.query(`CREATE TABLE IF NOT EXISTS nexus_schema_migrations (
+    await pool.query(`CREATE TABLE IF NOT EXISTS public.nexus_schema_migrations (
       migration_name TEXT PRIMARY KEY,
       applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`);
     const migrations = (await readdir(migrationDirectory)).filter((name) => name.endsWith('.sql')).sort();
 
     for (const name of migrations) {
-      const exists = await pool.query('SELECT 1 FROM nexus_schema_migrations WHERE migration_name = $1', [name]);
+      const exists = await pool.query('SELECT 1 FROM public.nexus_schema_migrations WHERE migration_name = $1', [name]);
       if (exists.rowCount) {
         process.stdout.write("skip " + name + " (already applied)" + String.fromCharCode(10));
         continue;
@@ -36,7 +36,7 @@ async function main(): Promise<void> {
       try {
         await client.query('BEGIN');
         await client.query(sql);
-        await client.query('INSERT INTO nexus_schema_migrations (migration_name) VALUES ($1)', [name]);
+        await client.query('INSERT INTO public.nexus_schema_migrations (migration_name) VALUES ($1)', [name]);
         await client.query('COMMIT');
         process.stdout.write("applied " + name + String.fromCharCode(10));
       } catch (error) {
