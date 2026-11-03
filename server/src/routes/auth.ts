@@ -71,7 +71,7 @@ function trustedEndpoint(value: string): URL {
   if (endpoint.protocol !== 'https:' && !localHttp) {
     throw new AppError(503, 'oidc_endpoint_requires_https', 'The identity provider must expose HTTPS endpoints.');
   }
-  if (endpoint.username || endpoint.password) {
+  if (endpoint.username || endpoint.password || endpoint.hash) {
     throw new AppError(503, 'oidc_endpoint_invalid', 'The identity provider returned an invalid endpoint.');
   }
   return endpoint;
@@ -83,7 +83,9 @@ async function loadDiscovery(issuer: string): Promise<OidcDiscovery> {
   try {
     response = await fetch(discoveryUrl, {
       headers: { accept: 'application/json' },
-      signal: AbortSignal.timeout(8_000)
+      signal: AbortSignal.timeout(8_000),
+      redirect: 'error',
+      cache: 'no-store'
     });
   } catch {
     throw new AppError(503, 'oidc_discovery_unavailable', 'The identity provider discovery endpoint is unavailable.');
@@ -111,6 +113,10 @@ async function loadDiscovery(issuer: string): Promise<OidcDiscovery> {
   return discovery as OidcDiscovery;
 }
 
+function encodeFormComponent(value: string): string {
+  return new URLSearchParams({ value }).toString().slice('value='.length);
+}
+
 function createTokenRequest(
   config: AppConfig,
   settings: { clientId: string; redirectUri: string },
@@ -130,8 +136,8 @@ function createTokenRequest(
   }
 
   if (config.oidcClientSecret && config.oidcClientAuthMethod === 'client_secret_basic') {
-    const encodedClientId = encodeURIComponent(settings.clientId);
-    const encodedClientSecret = encodeURIComponent(config.oidcClientSecret);
+    const encodedClientId = encodeFormComponent(settings.clientId);
+    const encodedClientSecret = encodeFormComponent(config.oidcClientSecret);
     return {
       body,
       authorization: 'Basic ' + Buffer.from(encodedClientId + ':' + encodedClientSecret).toString('base64')
@@ -161,7 +167,9 @@ async function exchangeAuthorizationCode(
       method: 'POST',
       headers,
       body: tokenRequest.body,
-      signal: AbortSignal.timeout(10_000)
+      signal: AbortSignal.timeout(10_000),
+      redirect: 'error',
+      cache: 'no-store'
     });
   } catch {
     throw new AppError(502, 'oidc_token_exchange_unavailable', 'Unable to contact the identity provider token endpoint.');
