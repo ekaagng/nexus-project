@@ -1,82 +1,111 @@
 # NEXUS — Marketing Intelligence & Operations PWA
 
-**Implementation baseline:** PRD NEXUS v0.3 · Nocturne / Midnight Observatory
+**Baseline:** PRD NEXUS v0.3 · Nocturne / Midnight Observatory  
+**Current implementation:** React/Vite demo frontend + PostgreSQL/Fastify backend foundations.
 
-This repository contains an executable React + TypeScript + Vite PWA baseline. It implements the information architecture and major operational workflows with browser-local persistence and an offline app shell. It is intentionally marked **LOCAL DEMO BUILD** because the PRD leaves production authentication, hosting, database, AI provider, and external API contracts open.
+The frontend now gates the app on a server-verified OIDC browser session, loads workspace membership from the API, and connects account/session controls plus Owner-only Access Management. Campaign, brief, task, content, Ads, sales, KOL and budget records remain local demo data; they are isolated by workspace ID in browser storage and are not shared server records. Provider APIs are not connected.
 
-## What is implemented
+## Frontend already implemented
 
-- Responsive Nocturne app shell: desktop sidebar, tablet/mobile navigation drawer, mobile bottom navigation, compact data density, safe-area spacing, focus states, and reduced-motion handling.
-- All primary destinations from the PRD: Overview, Brief Library, Campaigns and Campaign Workspace, Budget Control, Tasks & Approvals, Content Calendar, Content Studio, Ads & Sales, KOL & Creators, Performance Analytics, Competitor Intelligence, AI Insight Lab, Reports & Exports, Integrations, Settings, and Owner-only Access Management UI.
-- Local CRUD workflows for campaigns, briefs, tasks, content records, expenses, KOL profiles, orders, and competitor accounts. Task and content status transitions are editable.
-- Campaign relationships using human-readable IDs (CAM, CNT, TSK, EXP, KOL), quick navigation to campaign context, and local activity/data summaries.
-- CSV preview/import for orders and Ads records, sample templates in `templates/`, plus CSV exports.
-- Local JSON backup and restore.
-- Source-aware placeholders and explicit N/A states. Demo/sample records are labeled; actual sales are separated from Ads-attributed revenue.
-- Context-aware assistant drawer with rule-based demo findings, evidence/data-gap labels, and action-item handoff. It does not pretend to be a connected AI model.
-- PWA manifest, app icon, service worker app-shell/runtime caching, offline status, and last-known local data.
-- Floating Back appears only in the multi-step campaign creation flow after step one; returning to the previous step preserves form state.
-- Manual report preview with browser Print / Save as PDF. The production daily scheduler and Gmail delivery are explicitly not active.
-- Asia/Jakarta calendar-date helpers for date ranges and form defaults; UTC timestamps remain ISO timestamps for audit fields.
+- Responsive Nocturne app shell and all main workflow destinations.
+- Local CRUD for campaigns, briefs, tasks, content, expenses, KOL, orders and competitors.
+- CSV preview/import and CSV/JSON export.
+- Source-aware demo placeholders; actual sales remain separate from Ads-attributed revenue.
+- PWA manifest, service worker shell and offline behavior.
+- Asia/Jakarta date helpers.
 
-## Run locally
+## Backend foundation
 
-Requirements: Node.js 20+ and npm.
+- Fastify API on port 8787, separate from Vite's port 5173.
+- PostgreSQL tables for workspaces, memberships, integration connections/secrets, sync jobs/cursors, orders, daily Ads metrics, social metrics, content snapshots, source lineage and audit logs.
+- PostgreSQL Row-Level Security policies for workspace-scoped tables.
+- OIDC JWT verification through configured issuer, audience and JWKS URL.
+- AES-256-GCM token-vault utility. Secrets are not exposed by integration API responses.
+- Server-only provider connector registry and normalized order upsert boundary.
+- Health, workspace, integration metadata and sync-job API routes.
+
+## Workspace access management
+
+The `feat/authentication-management` child branch adds:
+
+- Owner-only member and invitation management endpoints.
+- Provider-neutral OIDC Authorization Code + PKCE login flow with state and nonce validation.
+- Opaque browser sessions stored as SHA-256 hashes, fixed expiry, per-request revalidation, logout and per-session/revoke-all controls.
+- HttpOnly/SameSite cookies, production Secure-cookie enforcement, exact-Origin CSRF validation and credentialed CORS limited to configured origins.
+- React session gate, workspace selection/onboarding, invite acceptance, account session list/revocation/logout and Owner-only Access Management UI.
+- One-time 256-bit invitation tokens; only SHA-256 token hashes are stored.
+- Seven-day invitation expiry and a database-reserved seat for every pending invite.
+- Verified-email matching during invitation acceptance.
+- Member/invitation revocation and audit events.
+- Database enforcement of the five-seat limit and immutable initial Owner.
+
+See [Workspace Access Management](docs/WORKSPACE_ACCESS_MANAGEMENT.md) for API contracts and security behavior.
+
+No Meta Ads, Scalev, Lynk.id, Instagram, TikTok or YouTube provider adapter is registered yet. Provider OAuth callbacks, token refresh, background worker execution and live dashboard reads remain separate implementation stages.
+
+## Requirements
+
+- Node.js 20+
+- npm
+- PostgreSQL 15+
+
+## Local setup
+
+1. Install packages:
+
+   ```bash
+   npm install
+   ```
+
+2. Copy `.env.example` to `.env`. Set `DATABASE_URL` to the restricted `nexus_app` connection and `MIGRATION_DATABASE_URL` to the dedicated schema-owner connection; migrations will refuse to run without it.
+
+3. Create the PostgreSQL database and roles, then apply migrations:
+
+   ```bash
+   npm run db:migrate
+   ```
+
+4. Run the frontend:
+
+   ```bash
+   npm run dev
+   ```
+
+5. In a second terminal, run the API:
+
+   ```bash
+   npm run dev:api
+   ```
+
+6. Check API status:
+
+   - `http://localhost:8787/health/live`
+   - `http://localhost:8787/health/ready`
+
+Frontend API calls use `VITE_API_BASE_URL` (standard local value: `http://localhost:8787`) with credentialed requests; configure the API `CORS_ORIGINS` to include the frontend origin. Browser login requires OIDC client settings and `APP_ENCRYPTION_KEY`. The service worker never caches `/api/*` responses. Business-domain data is still browser-local and must not be treated as shared workspace data.
+
+## Database security requirement
+
+Create separate `nexus_migrator` and `nexus_app` PostgreSQL roles before migrating. Grant the migrator `CREATE` on schema `public`; grant the app role `USAGE` on schema `public`. Run migrations with `MIGRATION_DATABASE_URL` as `nexus_migrator`, and use `DATABASE_URL` as `nexus_app`. The migration grants the runtime role table DML permissions and access to narrowly scoped helper functions. The runtime role must **not** own tables and must not have `BYPASSRLS`. PostgreSQL table owners bypass RLS unless forced, so using the migration owner as the API role defeats the tenant boundary.
+
+The API sets `nexus.user_id` and `nexus.workspace_id` with transaction-local settings. Keep them transaction-scoped when using pooled connections.
+
+## Useful commands
 
 ```bash
-npm install
-npm run dev
-```
-
-Open the local URL printed by Vite (normally `http://localhost:5173`). The service worker and installability should be tested on `localhost` or HTTPS. For a production bundle:
-
-```bash
+npm run typecheck
+npm run typecheck:server
 npm run build
-npm run preview
+npm run build:server
+npm run test:server
 ```
 
-## Demo behavior
+## Documentation
 
-The first launch seeds a clearly labeled sample workspace. Records are persisted in the current browser origin under localStorage key `nexus.workspace.v03`. Data is not shared between browsers or team members. Use **Settings → Local data backup** to export or restore the current browser's records.
+- [Data Integration Foundation](docs/DATA_INTEGRATION_FOUNDATION.md)
+- [Workspace Access Management](docs/WORKSPACE_ACCESS_MANAGEMENT.md)
+- [Production Gaps](docs/PRODUCTION_GAPS.md)
 
-The profile switch in the sidebar is a **visual role simulation only**. It is not authentication and does not enforce server security. Do not put real customer, KOL, financial, credentials, or order data into this local demo build.
+## Explicit production gaps
 
-## Important production gaps
-
-See [`docs/PRODUCTION_GAPS.md`](docs/PRODUCTION_GAPS.md) for the PRD traceability matrix and the components that need a trusted backend before go-live. In particular, this build does not implement server-side allowlisting/session revocation, a shared database, official provider OAuth, Gmail delivery, Google Drive backup, server-side 00:00 WIB scheduling, push notifications, or a hosted AI model/RAG service.
-
-## Project structure
-
-```text
-nexus-pwa/
-├── index.html
-├── package.json
-├── tsconfig.json
-├── vite.config.ts
-├── public/
-│   ├── manifest.webmanifest
-│   ├── sw.js
-│   └── icons/
-│       ├── nexus.svg
-│       ├── nexus-192.png
-│       └── nexus-512.png
-├── src/
-│   ├── App.tsx          # application shell, navigation, pages and workflow interactions
-│   ├── domain.ts        # domain models, local demo seed, IDs and formatters
-│   ├── contracts/       # provider, AI evidence and report scheduling contracts
-│   ├── main.tsx         # React entry point and service-worker registration
-│   └── styles.css       # Nocturne design system and responsive layout
-├── templates/            # CSV import templates
-│   ├── ads-import-template.csv
-│   └── orders-import-template.csv
-└── docs/
-    └── PRODUCTION_GAPS.md
-```
-
-## Design notes
-
-- UI surfaces use layered translucency; tables and forms use a higher-opacity glass surface for readability.
-- No remote fonts, icon CDNs, image CDNs, or external runtime assets are required.
-- Charts are rendered as inline SVG to avoid chart dependencies in the offline shell.
-- Motion uses opacity/transform; `prefers-reduced-motion` is respected.
-- This is a frontend application baseline, not a deployed multi-user production service.
+This is not yet a live multi-user or provider-connected release. The production identity-provider login flow and server-owned browser session lifecycle are not implemented. Invitation delivery is manual and the frontend Access Management UI is not connected to the new API. Official provider OAuth/API adapters, token refresh, queue worker and retry scheduler, connector-specific normalization, live dashboard queries, deployment secrets management, operational monitoring and security testing remain before production use.

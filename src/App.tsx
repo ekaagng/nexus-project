@@ -1,8 +1,19 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { AuthProvider, WorkspaceProvider, useAuth, useWorkspace } from './auth/AuthProvider';
+import { AccessManagement } from './auth/AccessManagement';
+import { SessionControls } from './auth/SessionControls';
+import type { AuthUser, WorkspaceSummary } from './auth/api';
 import {
   AdMetric, Brief, Campaign, Competitor, ContentItem, Expense, Experiment, Kol, Order,
-  PageId, Task, WorkspaceData, addJakartaDays, compactNumber, demoData, jakartaDateKey, loadWorkspace, makeId, makeSequentialId, rupiah, shortDate, STORAGE_KEY
+  PageId, Task, WorkspaceData, addJakartaDays, compactNumber, createEmptyWorkspaceData, demoData, jakartaDateKey, makeId, makeSequentialId, rupiah, shortDate, STORAGE_KEY
 } from './domain';
+import {
+  loadBusinessCollections, migrateLegacyBusinessCollections,
+  persistBusinessCollectionChanges, replaceBusinessCollections
+} from './data/businessDataApi';
+import {
+  localOnlyWorkspaceData, parseLegacyWorkspace, type BusinessDataKey, BUSINESS_DATA_RESOURCES
+} from './data/businessDataMapping';
 
 type ModalKind = 'campaign'|'task'|'content'|'expense'|'kol'|'order'|'brief'|'competitor'|'action'|'experiment'|null;
 type FieldOption = { label: string; value: string };
@@ -161,24 +172,24 @@ const formConfig: Record<Exclude<ModalKind, null>, { title: string; prefix: stri
     { key: 'dueDate', label: 'Due date', type: 'date', required: true }, { key: 'campaignId', label: 'Campaign', type: 'campaign' }
   ] },
   content: { title: 'Create content', prefix: 'CNT', fields: [
-    { key: 'title', label: 'Content title', required: true }, { key: 'platform', label: 'Platform', type: 'select', options: ['Instagram','TikTok','YouTube','Other'].map(x=>({label:x,value:x})) },
-    { key: 'pillar', label: 'Content pillar' }, { key: 'format', label: 'Format', type: 'select', options: ['Carousel','Short video','Reels','Stories','YouTube video','Shorts','Static'].map(x=>({label:x,value:x})) },
-    { key: 'hook', label: 'Hook', type: 'textarea', wide: true }, { key: 'cta', label: 'CTA' }, { key: 'owner', label: 'Owner' },
-    { key: 'status', label: 'Status', type: 'select', options: ['Idea','Brief','Production','Review','Changes Requested','Approved','Scheduled','Published','Evaluated'].map(x=>({label:x,value:x})) },
+    { key: 'title', label: 'Content title', required: true }, { key: 'platform', label: 'Platform', type: 'select', required: true, options: ['Instagram','TikTok','YouTube','Other'].map(x=>({label:x,value:x})) },
+    { key: 'pillar', label: 'Content pillar', required: true }, { key: 'format', label: 'Format', type: 'select', required: true, options: ['Carousel','Short video','Reels','Stories','YouTube video','Shorts','Static'].map(x=>({label:x,value:x})) },
+    { key: 'hook', label: 'Hook', type: 'textarea', required: true, wide: true }, { key: 'cta', label: 'CTA', required: true }, { key: 'owner', label: 'Owner', required: true },
+    { key: 'status', label: 'Status', type: 'select', required: true, options: ['Idea','Brief','Production','Review','Changes Requested','Approved','Scheduled','Published','Evaluated'].map(x=>({label:x,value:x})) },
     { key: 'publishDate', label: 'Publish date', type: 'date' }, { key: 'campaignId', label: 'Campaign', type: 'campaign' }
   ] },
   expense: { title: 'Add expense', prefix: 'EXP', fields: [
-    { key: 'title', label: 'Expense name', required: true }, { key: 'category', label: 'Category', type: 'select', options: ['Paid media','KOL','Production','Software','Other'].map(x=>({label:x,value:x})) },
-    { key: 'vendor', label: 'Vendor' }, { key: 'amount', label: 'Amount (IDR)', type: 'number', required: true },
-    { key: 'date', label: 'Date', type: 'date' }, { key: 'channel', label: 'Channel' },
-    { key: 'type', label: 'Cost type', type: 'select', options: [{label:'Actual',value:'actual'},{label:'Committed',value:'committed'}] },
+    { key: 'title', label: 'Expense name', required: true }, { key: 'category', label: 'Category', type: 'select', required: true, options: ['Paid media','KOL','Production','Software','Other'].map(x=>({label:x,value:x})) },
+    { key: 'vendor', label: 'Vendor', required: true }, { key: 'amount', label: 'Amount (IDR)', type: 'number', required: true },
+    { key: 'date', label: 'Date', type: 'date', required: true }, { key: 'channel', label: 'Channel' },
+    { key: 'type', label: 'Cost type', type: 'select', required: true, options: [{label:'Actual',value:'actual'},{label:'Committed',value:'committed'}] },
     { key: 'campaignId', label: 'Campaign', type: 'campaign' }
   ] },
   kol: { title: 'Add creator', prefix: 'KOL', fields: [
-    { key: 'name', label: 'Creator name', required: true }, { key: 'platform', label: 'Primary platform', type: 'select', options: ['Instagram','TikTok','YouTube'].map(x=>({label:x,value:x})) },
-    { key: 'handle', label: 'Handle' }, { key: 'instagramUrl', label: 'Instagram profile URL' }, { key: 'niche', label: 'Niche' },
-    { key: 'contact', label: 'Contact' }, { key: 'rate', label: 'Rate card (IDR)', type: 'number' },
-    { key: 'stage', label: 'Pipeline stage', type: 'select', options: ['Prospect','Contacted','Negotiation','Deal','Briefed','Draft Review','Approved','Published','Paid','Evaluated'].map(x=>({label:x,value:x})) },
+    { key: 'name', label: 'Creator name', required: true }, { key: 'platform', label: 'Primary platform', type: 'select', required: true, options: ['Instagram','TikTok','YouTube'].map(x=>({label:x,value:x})) },
+    { key: 'handle', label: 'Handle', required: true }, { key: 'instagramUrl', label: 'Instagram profile URL' }, { key: 'niche', label: 'Niche', required: true },
+    { key: 'contact', label: 'Contact' }, { key: 'rate', label: 'Rate card (IDR)', type: 'number', required: true },
+    { key: 'stage', label: 'Pipeline stage', type: 'select', required: true, options: ['Prospect','Contacted','Negotiation','Deal','Briefed','Draft Review','Approved','Published','Paid','Evaluated'].map(x=>({label:x,value:x})) },
     { key: 'campaignId', label: 'Campaign', type: 'campaign' }, { key: 'publishDate', label: 'Planned publish date', type: 'date' }, { key: 'notes', label: 'Notes', type: 'textarea', wide: true }
   ] },
   order: { title: 'Add order', prefix: 'ORD', fields: [
@@ -187,14 +198,14 @@ const formConfig: Record<Exclude<ModalKind, null>, { title: string; prefix: stri
     { key: 'amount', label: 'Order amount (IDR)', type: 'number', required: true }, { key: 'utm', label: 'UTM / source reference' }, { key: 'campaignId', label: 'Campaign', type: 'campaign' }
   ] },
   brief: { title: 'Create brief', prefix: 'BRF', fields: [
-    { key: 'title', label: 'Brief title', required: true }, { key: 'type', label: 'Brief type', type: 'select', options: ['Campaign','Content','Ads','KOL'].map(x=>({label:x,value:x})) },
-    { key: 'owner', label: 'Owner' }, { key: 'status', label: 'Status', type: 'select', options: ['Draft','In review','Approved'].map(x=>({label:x,value:x})) },
+    { key: 'title', label: 'Brief title', required: true }, { key: 'type', label: 'Brief type', type: 'select', required: true, options: ['Campaign','Content','Ads','KOL'].map(x=>({label:x,value:x})) },
+    { key: 'owner', label: 'Owner' }, { key: 'status', label: 'Status', type: 'select', required: true, options: ['Draft','In review','Approved'].map(x=>({label:x,value:x})) },
     { key: 'campaignId', label: 'Campaign', type: 'campaign' }
   ] },
   competitor: { title: 'Track competitor account', prefix: 'CMP', fields: [
-    { key: 'name', label: 'Account name', required: true }, { key: 'platform', label: 'Platform', type: 'select', options: ['Instagram','TikTok'].map(x=>({label:x,value:x})) },
-    { key: 'handle', label: 'Handle' }, { key: 'url', label: 'Profile URL' }, { key: 'label', label: 'Tracking label' },
-    { key: 'status', label: 'Tracking status', type: 'select', options: ['Tracking','Paused'].map(x=>({label:x,value:x})) }, { key: 'notes', label: 'Notes', type: 'textarea', wide: true }
+    { key: 'name', label: 'Account name', required: true }, { key: 'platform', label: 'Platform', type: 'select', required: true, options: ['Instagram','TikTok'].map(x=>({label:x,value:x})) },
+    { key: 'handle', label: 'Handle', required: true }, { key: 'url', label: 'Profile URL', required: true }, { key: 'label', label: 'Tracking label', required: true },
+    { key: 'status', label: 'Tracking status', type: 'select', required: true, options: ['Tracking','Paused'].map(x=>({label:x,value:x})) }, { key: 'notes', label: 'Notes', type: 'textarea', wide: true }
   ] },
   action: { title: 'Create action item', prefix: 'TSK', fields: [
     { key: 'title', label: 'Action item', required: true }, { key: 'owner', label: 'Task owner', required: true }, { key: 'assignee', label: 'PIC', required: true },
@@ -204,8 +215,8 @@ const formConfig: Record<Exclude<ModalKind, null>, { title: string; prefix: stri
   experiment: { title: 'Log Ads experiment', prefix: 'EXP', fields: [
     { key: 'name', label: 'Experiment name', required: true }, { key: 'owner', label: 'Owner', required: true },
     { key: 'hypothesis', label: 'Hypothesis', type: 'textarea', wide: true, required: true },
-    { key: 'changeMade', label: 'What changed?', type: 'textarea', wide: true },
-    { key: 'primaryMetric', label: 'Primary metric', required: true }, { key: 'successCriteria', label: 'Success criteria', type: 'textarea', wide: true },
+    { key: 'changeMade', label: 'What changed?', type: 'textarea', wide: true, required: true },
+    { key: 'primaryMetric', label: 'Primary metric', required: true }, { key: 'successCriteria', label: 'Success criteria', type: 'textarea', wide: true, required: true },
     { key: 'status', label: 'Status', type: 'select', options: ['Planned','Running','Completed','Inconclusive','Cancelled'].map(x=>({label:x,value:x})) },
     { key: 'startDate', label: 'Start date', type: 'date' }, { key: 'endDate', label: 'End date', type: 'date' }, { key: 'campaignId', label: 'Campaign', type: 'campaign' }
   ] }
@@ -215,11 +226,12 @@ function CreateModal({ kind, campaigns, onClose, onSave }: {
   kind: Exclude<ModalKind, null>; campaigns: Campaign[]; onClose: () => void; onSave: (values: Record<string, any>) => void;
 }) {
   const config = formConfig[kind];
-  const [values, setValues] = useState<Record<string, any>>({
+  const [values, setValues] = useState<Record<string, any>>(() => ({
     objective: 'Sales', owner: 'Marketing Lead', startDate: jakartaDateKey(), endDate: '',
     status: (kind === 'task' || kind === 'action') ? 'To Do' : kind === 'content' ? 'Idea' : kind === 'kol' ? 'Prospect' : kind === 'expense' ? 'actual' : kind === 'order' ? 'Paid' : kind === 'brief' ? 'Draft' : kind === 'competitor' ? 'Tracking' : kind === 'experiment' ? 'Planned' : 'Draft',
-    priority: 'Medium', dueDate: jakartaDateKey(), publishDate: jakartaDateKey(), date: jakartaDateKey()
-  });
+    priority: 'Medium', dueDate: jakartaDateKey(), publishDate: jakartaDateKey(), date: jakartaDateKey(),
+    ...Object.fromEntries(config.fields.filter(field => field.type === 'select').map(field => [field.key, field.options?.[0]?.value ?? '']))
+  }));
   const [step, setStep] = useState(0);
   const [error, setError] = useState('');
   const setValue = (key: string, value: any) => setValues(prev => ({ ...prev, [key]: value }));
@@ -273,13 +285,59 @@ function CreateModal({ kind, campaigns, onClose, onSave }: {
 }
 
 function App() {
-  const [data, setData] = useState<WorkspaceData>(() => loadWorkspace());
+  return <AuthProvider><WorkspaceProvider><AuthenticatedWorkspace /></WorkspaceProvider></AuthProvider>;
+}
+
+function AuthenticatedWorkspace() {
+  const { session, signOut } = useAuth();
+  const { workspace, workspaces, selectWorkspace } = useWorkspace();
+  return (
+    <WorkspaceApp
+      key={workspace.id}
+      user={session.user}
+      workspace={workspace}
+      workspaces={workspaces}
+      selectWorkspace={selectWorkspace}
+      onSignOut={signOut}
+    />
+  );
+}
+
+function WorkspaceApp({
+  user,
+  workspace,
+  workspaces,
+  selectWorkspace,
+  onSignOut
+}: {
+  user: AuthUser;
+  workspace: WorkspaceSummary;
+  workspaces: WorkspaceSummary[];
+  selectWorkspace: (id: string) => void;
+  onSignOut: () => Promise<void>;
+}) {
+  const workspaceStorageKey = STORAGE_KEY + ':' + workspace.id;
+  const localDataStorageKey = workspaceStorageKey + ':local-v1';
+  const migrationMarkerKey = workspaceStorageKey + ':business-api-v1';
+  const legacyRawRef = useRef<string | null | undefined>(undefined);
+  if (legacyRawRef.current === undefined) {
+    try { legacyRawRef.current = localStorage.getItem(workspaceStorageKey); }
+    catch { legacyRawRef.current = null; }
+  }
+  const isOwner = workspace.role === 'owner';
+  const [data, setData] = useState<WorkspaceData>(() => createEmptyWorkspaceData());
+  const dataRef = useRef(data);
+  const mutationQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const [dataReady, setDataReady] = useState(false);
+  const [dataError, setDataError] = useState('');
+  const [dataStatus, setDataStatus] = useState('Preparing workspace data');
+  const [retryVersion, setRetryVersion] = useState(0);
+  const [savingCount, setSavingCount] = useState(0);
   const [page, setPage] = useState<PageId>('overview');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [modal, setModal] = useState<ModalKind>(null);
-  const [profileRole, setProfileRole] = useState<'Owner'|'Member'>('Owner');
   const [dateRange, setDateRange] = useState('7D');
   const [campaignFilter, setCampaignFilter] = useState('all');
   const [channelFilter, setChannelFilter] = useState('all');
@@ -302,8 +360,95 @@ function App() {
   const importInput = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...data, updatedAt: new Date().toISOString() }));
-  }, [data]);
+    let cancelled = false;
+
+    const initializeWorkspaceData = async () => {
+      setDataReady(false);
+      setDataError('');
+      setDataStatus('Checking local workspace snapshot');
+
+      try {
+        let localData: WorkspaceData;
+        const marker = localStorage.getItem(migrationMarkerKey);
+
+        if (!marker) {
+          const legacy = legacyRawRef.current
+            ? parseLegacyWorkspace(legacyRawRef.current)
+            : createEmptyWorkspaceData();
+          let migration = { imported: 0, skipped: 0 };
+
+          if (legacyRawRef.current) {
+            setDataStatus('Migrating existing browser records');
+            migration = await migrateLegacyBusinessCollections(workspace.id, legacy, (resource, completed, total) => {
+              setDataStatus(`Migrating ${resource} · ${completed}/${total}`);
+            });
+          }
+
+          localData = legacy;
+          localStorage.setItem(localDataStorageKey, JSON.stringify(localOnlyWorkspaceData(localData)));
+          localStorage.setItem(migrationMarkerKey, JSON.stringify({
+            version: 1,
+            completedAt: new Date().toISOString(),
+            imported: migration.imported,
+            skipped: migration.skipped,
+            legacySnapshotPreserved: Boolean(legacyRawRef.current)
+          }));
+        } else {
+          const localRaw = localStorage.getItem(localDataStorageKey);
+          if (localRaw) {
+            const localParsed = JSON.parse(localRaw) as Partial<WorkspaceData>;
+            localData = {
+              ...createEmptyWorkspaceData(),
+              ...localParsed,
+              campaigns: [], tasks: [], contents: [], expenses: [], kols: [],
+              briefs: [], experiments: [], competitors: [], competitorPosts: [],
+              orders: localParsed.orders ?? [],
+              ads: localParsed.ads ?? [],
+              notifications: localParsed.notifications ?? [],
+              updatedAt: localParsed.updatedAt ?? new Date().toISOString()
+            };
+          } else if (legacyRawRef.current) {
+            localData = parseLegacyWorkspace(legacyRawRef.current);
+          } else {
+            localData = createEmptyWorkspaceData();
+          }
+        }
+
+        setDataStatus('Loading workspace records from PostgreSQL');
+        const remote = await loadBusinessCollections(workspace.id);
+        const next: WorkspaceData = {
+          ...createEmptyWorkspaceData(),
+          ...remote,
+          orders: localData.orders,
+          ads: localData.ads,
+          notifications: localData.notifications,
+          updatedAt: new Date().toISOString()
+        };
+
+        if (cancelled) return;
+        dataRef.current = next;
+        setData(next);
+        setDataReady(true);
+        setDataStatus('Workspace data is synchronized');
+      } catch (error) {
+        if (cancelled) return;
+        setDataError(error instanceof Error ? error.message : 'Workspace data could not be loaded.');
+        setDataStatus('Workspace data needs attention');
+      }
+    };
+
+    void initializeWorkspaceData();
+    return () => { cancelled = true; };
+  }, [workspace.id, retryVersion]);
+
+  useEffect(() => {
+    if (!dataReady) return;
+    try {
+      localStorage.setItem(localDataStorageKey, JSON.stringify(localOnlyWorkspaceData(data)));
+    } catch {
+      setDataError('Browser-local orders, Ads, or notifications could not be saved. Export a JSON backup before continuing.');
+    }
+  }, [data.orders, data.ads, data.notifications, data.updatedAt, dataReady, localDataStorageKey]);
   useEffect(() => {
     const onOnline = () => setOnline(true);
     const onOffline = () => setOnline(false);
@@ -316,19 +461,79 @@ function App() {
     return () => window.clearTimeout(timer);
   }, [toast]);
   useEffect(() => {
-    if (profileRole === 'Member' && page === 'access') setPage('overview');
-  }, [profileRole, page]);
-  useEffect(() => {
     const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') { setDrawerOpen(false); setAiOpen(false); setNotificationsOpen(false); if (modal) setModal(null); } };
     window.addEventListener('keydown', onKey); return () => window.removeEventListener('keydown', onKey);
   }, [modal]);
 
-  const update = <K extends keyof WorkspaceData,>(key: K, updater: (current: WorkspaceData[K]) => WorkspaceData[K]) => {
-    setData(prev => ({ ...prev, [key]: updater(prev[key]), updatedAt: new Date().toISOString() }));
+  const update = <K extends keyof WorkspaceData,>(key: K, updater: (current: WorkspaceData[K]) => WorkspaceData[K]): Promise<void> => {
+    setSavingCount(value => value + 1);
+    const operation = mutationQueueRef.current.then(async () => {
+      if (!dataReady) throw new Error('Workspace data has not finished loading.');
+      const current = dataRef.current;
+      const nextValue = updater(current[key]);
+      if (BUSINESS_DATA_RESOURCES.some(item => item.key === key)) {
+        await persistBusinessCollectionChanges(
+          workspace.id,
+          key as BusinessDataKey,
+          current[key] as WorkspaceData[BusinessDataKey],
+          nextValue as WorkspaceData[BusinessDataKey]
+        );
+      }
+      const nextData = { ...current, [key]: nextValue, updatedAt: new Date().toISOString() } as WorkspaceData;
+      dataRef.current = nextData;
+      setData(nextData);
+    });
+    mutationQueueRef.current = operation.catch(() => undefined);
+    return operation.finally(() => setSavingCount(value => Math.max(0, value - 1)));
   };
+
+  const replaceAllData = (nextData: WorkspaceData): Promise<void> => {
+    setSavingCount(value => value + 1);
+    const operation = mutationQueueRef.current.then(async () => {
+      if (!dataReady) throw new Error('Workspace data has not finished loading.');
+      const current = dataRef.current;
+      await replaceBusinessCollections(workspace.id, current, nextData);
+      const next = { ...nextData, updatedAt: new Date().toISOString() };
+      dataRef.current = next;
+      setData(next);
+    });
+    mutationQueueRef.current = operation.catch(() => undefined);
+    return operation.finally(() => setSavingCount(value => Math.max(0, value - 1)));
+  };
+
   const notify = (message: string) => setToast(message);
+
+  if (!dataReady) {
+    return (
+      <main className="auth-screen">
+        <section className="auth-frame" aria-live="polite">
+          <div className="auth-brand">
+            <span className="brand-mark">N</span>
+            <span><strong>NEXUS</strong><small>MARKETING INTELLIGENCE</small></span>
+          </div>
+          <div className="auth-copy">
+            <span className="eyebrow">{dataError ? 'DATA MIGRATION ERROR' : 'WORKSPACE DATA'}</span>
+            <h1>{dataError ? 'Workspace data needs attention' : 'Preparing your workspace'}</h1>
+            <p>{dataError || dataStatus}</p>
+          </div>
+          {dataError ? (
+            <div className="auth-actions">
+              <button className="btn btn-primary btn-block" onClick={() => setRetryVersion(value => value + 1)}>
+                Retry data migration
+              </button>
+              <p className="auth-inline-error">Data lama tidak dihapus. Snapshot browser asli tetap dipertahankan sampai proses migrasi selesai.</p>
+            </div>
+          ) : (
+            <div className="auth-progress" role="status"><span /> {dataStatus}</div>
+          )}
+          <p className="auth-footnote">Workspace records · PostgreSQL · Browser backup preserved</p>
+        </section>
+      </main>
+    );
+  }
+
   const navigate = (target: PageId) => {
-    if (target === 'access' && profileRole !== 'Owner') { notify('Access Management hanya tersedia untuk Owner.'); return; }
+    if (target === 'access' && !isOwner) { notify('Access Management hanya tersedia untuk Owner.'); return; }
     setPage(target); setDrawerOpen(false); setAiOpen(false); setNotificationsOpen(false); setGlobalSearch('');
   };
   const campaign = selectedCampaign ? data.campaigns.find(c => c.id === selectedCampaign) : undefined;
@@ -362,56 +567,76 @@ function App() {
   const pageMeta = page === 'campaign-detail' ? pageTitles['campaign-detail'] : pageTitles[page];
   const openCreate = (kind: Exclude<ModalKind,null>) => setModal(kind);
   const openCampaign = (id: string) => { setSelectedCampaign(id); setCampaignTab('Overview'); navigate('campaign-detail'); };
-  const createRecord = (values: Record<string, any>) => {
-    switch (modal) {
-      case 'campaign': {
-        const next: Campaign = { id: makeId('CAM', data.campaigns.length, data.campaigns.map(c=>c.id)), name: values.name, objective: values.objective, owner: values.owner, startDate: values.startDate, endDate: values.endDate, targetRevenue: values.targetRevenue, plannedBudget: values.plannedBudget, channels: values.channels, status: values.status };
-        update('campaigns', curr => [next, ...curr]); notify('Campaign berhasil disimpan di perangkat ini.'); break;
+  const createRecord = async (values: Record<string, any>) => {
+    try {
+      let successMessage = '';
+      switch (modal) {
+        case 'campaign': {
+          const next: Campaign = { id: makeId('CAM', data.campaigns.length, data.campaigns.map(c=>c.id)), name: values.name, objective: values.objective, owner: values.owner, startDate: values.startDate, endDate: values.endDate, targetRevenue: values.targetRevenue, plannedBudget: values.plannedBudget, channels: values.channels, status: values.status };
+          await update('campaigns', curr => [next, ...curr]); successMessage = 'Campaign tersimpan di PostgreSQL.'; break;
+        }
+        case 'task': case 'action': {
+          const next: Task = { id: makeId('TSK', data.tasks.length, data.tasks.map(t=>t.id)), title: values.title, description: values.description, owner: values.owner || 'Marketing Lead', assignee: values.assignee, priority: values.priority || 'Medium', status: values.status || 'To Do', dueDate: values.dueDate, campaignId: values.campaignId };
+          await update('tasks', curr => [next, ...curr]); successMessage = 'Task tersimpan di PostgreSQL.'; break;
+        }
+        case 'content': {
+          const next: ContentItem = { id: makeId('CNT', data.contents.length, data.contents.map(c=>c.id)), title: values.title, platform: values.platform, pillar: values.pillar, format: values.format, hook: values.hook, cta: values.cta, owner: values.owner, status: values.status, publishDate: values.publishDate, campaignId: values.campaignId, views: 0, engagement: 0 };
+          await update('contents', curr => [next, ...curr]); successMessage = 'Content record tersimpan di PostgreSQL.'; break;
+        }
+        case 'expense': {
+          const next: Expense = { id: makeId('EXP', data.expenses.length, data.expenses.map(e=>e.id)), title: values.title, category: values.category, vendor: values.vendor || 'Unspecified', amount: values.amount, date: values.date, channel: values.channel, type: values.type, campaignId: values.campaignId };
+          await update('expenses', curr => [next, ...curr]); successMessage = 'Expense tersimpan di PostgreSQL.'; break;
+        }
+        case 'kol': {
+          const next: Kol = { id: makeSequentialId('KOL', data.kols.map(k=>k.id), 5), name: values.name, platform: values.platform, handle: values.handle, instagramUrl: values.instagramUrl || '', niche: values.niche, contact: values.contact || '', rate: values.rate, stage: values.stage, campaignId: values.campaignId, publishDate: values.publishDate || undefined, notes: values.notes };
+          await update('kols', curr => [next, ...curr]); successMessage = 'Creator tersimpan di PostgreSQL.'; break;
+        }
+        case 'order': {
+          const exists = data.orders.some(o=>o.id===values.id);
+          if (exists) { notify('Order ID sudah ada. Record duplikat ditolak.'); return; }
+          const next: Order = { id: values.id, source: values.source, date: values.date, status: values.status, amount: values.amount, utm: values.utm, campaignId: values.campaignId };
+          await update('orders', curr => [next, ...curr]); successMessage = 'Order tersimpan pada data browser lokal.'; break;
+        }
+        case 'brief': {
+          const next: Brief = { id: makeSequentialId('BRF', data.briefs.map(b=>b.id), 4), title: values.title, type: values.type, campaignId: values.campaignId, status: values.status, owner: values.owner, updatedAt: jakartaDateKey() };
+          await update('briefs', curr => [next, ...curr]); successMessage = 'Brief tersimpan di PostgreSQL.'; break;
+        }
+        case 'experiment': {
+          const next: Experiment = { id: makeSequentialId('EXP-TEST', data.experiments.map(e=>e.id), 3), name: values.name, hypothesis: values.hypothesis, changeMade: values.changeMade, primaryMetric: values.primaryMetric, successCriteria: values.successCriteria, owner: values.owner, status: values.status || 'Planned', startDate: values.startDate, endDate: values.endDate || undefined, campaignId: values.campaignId };
+          await update('experiments', curr => [next, ...curr]); successMessage = 'Experiment tersimpan di PostgreSQL.'; break;
+        }
+        case 'competitor': {
+          const next: Competitor = { id: makeSequentialId('CMP', data.competitors.map(c=>c.id), 4), name: values.name, platform: values.platform, handle: values.handle, url: values.url, label: values.label, notes: values.notes || '', status: values.status };
+          await update('competitors', curr => [next, ...curr]); successMessage = 'Competitor tersimpan di PostgreSQL.'; break;
+        }
       }
-      case 'task': case 'action': {
-        const next: Task = { id: makeId('TSK', data.tasks.length, data.tasks.map(t=>t.id)), title: values.title, description: values.description, owner: values.owner || 'Marketing Lead', assignee: values.assignee, priority: values.priority || 'Medium', status: values.status || 'To Do', dueDate: values.dueDate, campaignId: values.campaignId };
-        update('tasks', curr => [next, ...curr]); notify('Task berhasil dibuat.'); break;
-      }
-      case 'content': {
-        const next: ContentItem = { id: makeId('CNT', data.contents.length, data.contents.map(c=>c.id)), title: values.title, platform: values.platform, pillar: values.pillar, format: values.format, hook: values.hook, cta: values.cta, owner: values.owner, status: values.status, publishDate: values.publishDate, campaignId: values.campaignId, views: 0, engagement: 0 };
-        update('contents', curr => [next, ...curr]); notify('Content record berhasil dibuat.'); break;
-      }
-      case 'expense': {
-        const next: Expense = { id: makeId('EXP', data.expenses.length, data.expenses.map(e=>e.id)), title: values.title, category: values.category, vendor: values.vendor, amount: values.amount, date: values.date, channel: values.channel, type: values.type, campaignId: values.campaignId };
-        update('expenses', curr => [next, ...curr]); notify('Expense berhasil dicatat.'); break;
-      }
-      case 'kol': {
-        const next: Kol = { id: makeSequentialId('KOL', data.kols.map(k=>k.id), 5), name: values.name, platform: values.platform, handle: values.handle, instagramUrl: values.instagramUrl, niche: values.niche, contact: values.contact, rate: values.rate, stage: values.stage, campaignId: values.campaignId, publishDate: values.publishDate || undefined, notes: values.notes };
-        update('kols', curr => [next, ...curr]); notify('Creator berhasil ditambahkan.'); break;
-      }
-      case 'order': {
-        const exists = data.orders.some(o=>o.id===values.id);
-        if (exists) { notify('Order ID sudah ada. Record duplikat ditolak.'); break; }
-        const next: Order = { id: values.id, source: values.source, date: values.date, status: values.status, amount: values.amount, utm: values.utm, campaignId: values.campaignId };
-        update('orders', curr => [next, ...curr]); notify('Order berhasil dicatat.'); break;
-      }
-      case 'brief': {
-        const next: Brief = { id: makeSequentialId('BRF', data.briefs.map(b=>b.id), 4), title: values.title, type: values.type, campaignId: values.campaignId, status: values.status, owner: values.owner, updatedAt: jakartaDateKey() };
-        update('briefs', curr => [next, ...curr]); notify('Brief berhasil dibuat.'); break;
-      }
-      case 'experiment': {
-        const next: Experiment = { id: makeSequentialId('EXP-TEST', data.experiments.map(e=>e.id), 3), name: values.name, hypothesis: values.hypothesis, changeMade: values.changeMade, primaryMetric: values.primaryMetric, successCriteria: values.successCriteria, owner: values.owner, status: values.status || 'Planned', startDate: values.startDate, endDate: values.endDate, campaignId: values.campaignId };
-        update('experiments', curr => [next, ...curr]); notify('Experiment log berhasil dibuat.'); break;
-      }
-      case 'competitor': {
-        const next: Competitor = { id: makeSequentialId('CMP', data.competitors.map(c=>c.id), 4), name: values.name, platform: values.platform, handle: values.handle, url: values.url, label: values.label, notes: values.notes, status: values.status };
-        update('competitors', curr => [next, ...curr]); notify('Akun kompetitor ditambahkan. Hanya data publik/manual yang didukung.'); break;
-      }
+      setModal(null);
+      if (successMessage) notify(successMessage);
+    } catch (error) {
+      notify(error instanceof Error ? `Gagal menyimpan: ${error.message}` : 'Gagal menyimpan data ke server.');
     }
-    setModal(null);
   };
 
-  const updateTaskStatus = (id: string, status: string) => update('tasks', curr => curr.map(t=>t.id===id?{...t,status}:t));
-  const updateContentStatus = (id: string, status: string) => update('contents', curr => curr.map(c=>c.id===id?{...c,status}:c));
-  const removeRecord = (type: 'campaigns'|'tasks'|'contents'|'expenses'|'kols'|'orders'|'briefs'|'competitors', id: string) => {
+  const updateTaskStatus = (id: string, status: string) => {
+    void update('tasks', curr => curr.map(t=>t.id===id?{...t,status}:t))
+      .catch(error => notify(error instanceof Error ? `Gagal memperbarui task: ${error.message}` : 'Gagal memperbarui task.'));
+  };
+  const updateContentStatus = (id: string, status: string) => {
+    void update('contents', curr => curr.map(c=>c.id===id?{...c,status}:c))
+      .catch(error => notify(error instanceof Error ? `Gagal memperbarui content: ${error.message}` : 'Gagal memperbarui content.'));
+  };
+  const removeRecord = async (type: 'campaigns'|'tasks'|'contents'|'expenses'|'kols'|'orders'|'briefs'|'competitors', id: string) => {
     const names: Record<string,string> = { campaigns:'Campaign',tasks:'Task',contents:'Content',expenses:'Expense',kols:'Creator',orders:'Order',briefs:'Brief',competitors:'Competitor' };
-    if (!window.confirm(`Hapus ${names[type]} ${id}? Data lokal akan dihapus dari workspace demo.`)) return;
-    update(type, (curr: any) => curr.filter((item: any)=>item.id!==id) as any); notify(`${names[type]} dihapus dari data lokal.`);
+    if (!window.confirm(`Hapus ${names[type]} ${id} dari workspace? Perubahan akan disimpan ke sumber data yang aktif.`)) return;
+    try {
+      if (type === 'competitors') {
+        await update('competitorPosts', curr => curr.filter(item => item.competitorId !== id));
+      }
+      await update(type, (curr: any) => curr.filter((item: any)=>item.id!==id) as any);
+      notify(`${names[type]} dihapus dari workspace.`);
+    } catch (error) {
+      notify(error instanceof Error ? `Gagal menghapus: ${error.message}` : 'Gagal menghapus record.');
+    }
   };
 
   const exportJSON = () => {
@@ -431,9 +656,13 @@ function App() {
       const parsed = JSON.parse(await file.text());
       const restored = parsed.data || parsed;
       if (!Array.isArray(restored.campaigns) || !Array.isArray(restored.tasks) || !Array.isArray(restored.orders)) throw new Error('Format backup tidak dikenali.');
-      if (!window.confirm('Ganti seluruh data lokal saat ini dengan isi backup?')) return;
-      setData({ ...demoData, ...restored, updatedAt: new Date().toISOString() }); notify('Backup berhasil dipulihkan ke penyimpanan lokal.');
-    } catch (error) { notify(error instanceof Error ? error.message : 'Backup tidak dapat dibaca.'); }
+      if (!window.confirm('Ganti seluruh data workspace di server dan data lokal dengan isi backup? Snapshot lama akan tetap dipertahankan.')) return;
+      const nextData = parseLegacyWorkspace(JSON.stringify({ ...demoData, ...restored, updatedAt: new Date().toISOString() }));
+      await replaceAllData(nextData);
+      notify('Backup berhasil dipulihkan ke workspace.');
+    } catch (error) {
+      notify(error instanceof Error ? `Restore gagal: ${error.message}` : 'Backup tidak dapat dipulihkan.');
+    }
   };
 
   const handleCsvFile = async (file?: File) => {
@@ -515,16 +744,19 @@ function App() {
 
   const renderSidebar = (mobile = false) => <>
     <div className="brand-row"><div className="brand-mark">N</div><div><strong>NEXUS</strong><span>MARKETING INTELLIGENCE</span></div><button className="icon-btn drawer-close" onClick={()=>setDrawerOpen(false)} aria-label="Close menu"><Icon name="close"/></button></div>
-    <div className="workspace-chip"><span className="workspace-orb"/><div><strong>Daytoday Workspace</strong><small>Private workspace · Demo</small></div><Icon name="chevron" size={14}/></div>
+    <div className="workspace-chip"><span className="workspace-orb"/><div className="workspace-chip-copy"><strong>{workspace.name}</strong><small>{workspaces.length} workspace · {workspace.role === 'owner' ? 'Owner' : 'Member'}</small></div>{workspaces.length > 1 && <select className="workspace-switcher" aria-label="Switch workspace" value={workspace.id} onChange={event => selectWorkspace(event.target.value)}>{workspaces.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>}<Icon name="chevron" size={14}/></div>
     <nav className="side-nav" aria-label="Main navigation">
       {navGroups.map(group=><div className="nav-group" key={group.title}>
         <div className="nav-group-title">{group.title}</div>
-        {group.items.filter(item=>item.id!=='access'||profileRole==='Owner').map(item=><button key={item.id} className={`nav-item ${page===item.id?'active':''}`} onClick={()=>navigate(item.id)}>
+        {group.items.filter(item=>item.id!=='access'||isOwner).map(item=><button key={item.id} className={`nav-item ${page===item.id?'active':''}`} onClick={()=>navigate(item.id)}>
           <Icon name={item.icon}/><span>{item.label}</span>{item.id==='tasks' && overdueTasks.length>0 && <em>{overdueTasks.length}</em>}
         </button>)}
       </div>)}
     </nav>
-    <div className="sidebar-footer"><div className="sync-mini"><span className="pulse-dot"/><div><strong>{online?'Workspace online':'Offline snapshot'}</strong><small>Local cache · {new Date(data.updatedAt).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'})}</small></div></div><div className="sidebar-profile"><div className="avatar">{profileRole==='Owner'?'O':'M'}</div><div><strong>{profileRole==='Owner'?'Workspace Owner':'Workspace Member'}</strong><small>{profileRole} · Local demo mode</small></div><button className="icon-btn" onClick={()=>setProfileRole(r=>r==='Owner'?'Member':'Owner')} aria-label="Switch demo role"><Icon name="more"/></button></div></div>
+    <div className="sidebar-footer">
+      <div className="sync-mini"><span className="pulse-dot"/><div><strong>{online?'Workspace online':'Offline snapshot'}</strong><small>Local data · {new Date(data.updatedAt).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'})}</small></div></div>
+      <div className="sidebar-profile"><div className="avatar">{(user.email || user.id).slice(0,1).toUpperCase()}</div><div><strong>{user.email || 'Authenticated user'}</strong><small>{workspace.role === 'owner' ? 'Owner' : 'Member'} · Server verified</small></div></div>
+    </div>
   </>;
 
   const renderHeader = () => <header className="topbar">
@@ -535,6 +767,7 @@ function App() {
       </div>
       <button className="icon-btn notification-trigger" onClick={()=>setNotificationsOpen(v=>!v)} aria-label="Notifications"><Icon name="bell"/>{data.notifications.length>0&&<i/>}</button>
       <button className="ai-top-trigger" onClick={()=>setAiOpen(true)}><span className="ai-orb-mini"><Icon name="sparkles" size={14}/></span><span>Ask NEXUS</span></button>
+      <SessionControls user={user} role={workspace.role} workspaceName={workspace.name} onSignOut={onSignOut}/>
     </div>
     {notificationsOpen && <div className="notification-popover glass"><div className="popover-title"><strong>Notifications</strong><button className="text-btn" onClick={()=>update('notifications',()=>[])}>Clear all</button></div>{data.notifications.length ? data.notifications.map(n=><div className="notification-item" key={n.id}><span className={`notification-dot ${n.level}`}/><div><strong>{n.title}</strong><p>{n.detail}</p><small>{n.time}</small></div></div>) : <Empty title="You're all caught up" body="Tidak ada notifikasi baru."/>}</div>}
   </header>;
@@ -610,7 +843,19 @@ function App() {
   </>;
 
   const renderCampaignDetail = () => {
-    if (!campaign) return <Empty title="Campaign tidak ditemukan" body="Campaign mungkin sudah dihapus dari data lokal." action={<button className="btn btn-secondary" onClick={()=>navigate('campaigns')}>Back to campaigns</button}/>;
+    if (!campaign) {
+      return (
+        <Empty
+          title="Campaign tidak ditemukan"
+          body="Campaign mungkin sudah dihapus dari data lokal."
+          action={
+            <button className="btn btn-secondary" onClick={() => navigate('campaigns')}>
+              Back to campaigns
+            </button>
+          }
+        />
+      );
+    }
     const linkedTasks = data.tasks.filter(t=>t.campaignId===campaign.id);
     const linkedContents = data.contents.filter(c=>c.campaignId===campaign.id);
     const linkedKols = data.kols.filter(k=>k.campaignId===campaign.id);
@@ -726,7 +971,7 @@ function App() {
 
   const renderAnalytics = () => <><SectionTitle title="Performance analytics" eyebrow="CROSS-CHANNEL VIEW" action={<select className="period-select" value={dateRange} onChange={e=>setDateRange(e.target.value)}><option value="7D">Last 7 days</option><option value="30D">Last 30 days</option><option value="90D">Last 90 days</option></select>}/><div className="metric-grid four"><MetricCard label="Actual sales revenue" value={rupiah(revenue)} detail="Order source · paid only" icon="wallet" tone="mint"/><MetricCard label="Ads attributed revenue" value={rupiah(attributedRevenue)} detail="Platform-reported attribution" icon="chart" tone="blue"/><MetricCard label="Paid media spend" value={rupiah(spend)} detail="Imported spend" icon="activity" tone="amber"/><MetricCard label="Blended ROAS" value={blendedRoas===undefined?'N/A':`${blendedRoas.toFixed(2)}x`} detail="Actual revenue / paid spend" icon="sparkles"/></div><div className="content-two-col"><Panel title="Revenue vs ad spend"><div className="chart-summary"><strong>{rupiah(revenue)}</strong><span>Actual paid revenue · local dataset</span></div><TrendChart/></Panel><Panel title="Channel coverage"><div className="coverage-list">{['Meta Ads','Instagram','TikTok','YouTube','Scalev','Lynk.id'].map((item,i)=><div key={item}><span>{item}</span><Badge tone={i===0?'warning':'neutral'}>{i===0?'CSV / demo':'Not connected'}</Badge></div>)}</div></Panel></div><Panel title="Content performance ranking"><div className="table-wrap"><table><thead><tr><th>Content</th><th>Platform</th><th>Format</th><th>Views</th><th>Engagement rate</th></tr></thead><tbody>{[...scopedContents].sort((a,b)=>(b.views||0)-(a.views||0)).map(c=><tr key={c.id}><td><strong>{c.title}</strong><small>{c.id}</small></td><td>{c.platform}</td><td>{c.format}</td><td>{c.views?compactNumber(c.views):'N/A'}</td><td>{c.engagement?`${c.engagement}%`:'N/A'}</td></tr>)}</tbody></table></div></Panel><div className="helper-row"><span>Engagement rate lintas platform tidak dapat dibandingkan tanpa denominator yang konsisten. Metrik kosong ditampilkan N/A.</span></div></>;
 
-  const renderCompetitors = () => <><SectionTitle title="Competitor intelligence" eyebrow="PUBLIC SIGNAL MONITORING" action={<button className="btn btn-primary" onClick={()=>openCreate('competitor')}><Icon name="plus" size={15}/> Track account</button>}/><div className="notice notice-warning"><Icon name="shield"/><span>NEXUS hanya menyimpan metrik publik atau data yang diunggah secara sah. Reach, saves, impressions, dan conversion privat tidak diasumsikan tersedia.</span></div><div className="competitor-grid">{data.competitors.map(c=><div className="competitor-card" key={c.id}><div className="competitor-head"><span className="competitor-avatar">{c.platform==='Instagram'?'◎':'♪'}</span><Badge tone="success">{c.status}</Badge></div><h3>{c.name}</h3><p>{c.handle} · {c.platform}</p><div className="competitor-label">{c.label}</div><small>{c.notes}</small><div className="competitor-actions"><button className="text-btn" onClick={()=>{update('competitorPosts',curr=>[{id:`CMP-POST-${Date.now()}`,competitorId:c.id,title:'Manual observation',url:c.url,observedAt:jakartaDateKey(),format:'Unknown',hook:'Not recorded',angle:'Not recorded',note:'Add evidence from public URL or authorized upload.'},...curr]);notify('Observation note dibuat. Lengkapi bukti secara manual.')}}>Add observation</button><button className="icon-btn small" onClick={()=>removeRecord('competitors',c.id)} aria-label="Remove competitor"><Icon name="close" size={14}/></button></div></div>)}</div><Panel title="Observed public content"><div className="simple-list">{data.competitorPosts.map(post=><div key={post.id}><span className="list-icon"><Icon name="radar"/></span><div><strong>{post.title}</strong><small>{post.format} · {shortDate(post.observedAt)} · {post.hook}</small><small>Views {post.views?compactNumber(post.views):'N/A'} · Likes {post.likes??'N/A'} · Shares {post.shares??'N/A'}</small></div><Badge tone="info">Public / manual</Badge></div>)}</div>{!data.competitorPosts.length&&<Empty title="No observation yet" body="Tambahkan URL dan catat struktur konten yang terlihat."/>}</Panel></>;
+  const renderCompetitors = () => <><SectionTitle title="Competitor intelligence" eyebrow="PUBLIC SIGNAL MONITORING" action={<button className="btn btn-primary" onClick={()=>openCreate('competitor')}><Icon name="plus" size={15}/> Track account</button>}/><div className="notice notice-warning"><Icon name="shield"/><span>NEXUS hanya menyimpan metrik publik atau data yang diunggah secara sah. Reach, saves, impressions, dan conversion privat tidak diasumsikan tersedia.</span></div><div className="competitor-grid">{data.competitors.map(c=><div className="competitor-card" key={c.id}><div className="competitor-head"><span className="competitor-avatar">{c.platform==='Instagram'?'◎':'♪'}</span><Badge tone="success">{c.status}</Badge></div><h3>{c.name}</h3><p>{c.handle} · {c.platform}</p><div className="competitor-label">{c.label}</div><small>{c.notes}</small><div className="competitor-actions"><button className="text-btn" onClick={()=>{void update('competitorPosts',curr=>[{id:`CMP-POST-${Date.now()}`,competitorId:c.id,title:'Manual observation',url:c.url,observedAt:jakartaDateKey(),format:'Unknown',hook:'Not recorded',angle:'Not recorded',note:'Add evidence from public URL or authorized upload.'},...curr]).then(()=>notify('Observation tersimpan di PostgreSQL.')).catch(error=>notify(error instanceof Error ? `Gagal menyimpan observation: ${error.message}` : 'Gagal menyimpan observation.'))}}>Add observation</button><button className="icon-btn small" onClick={()=>removeRecord('competitors',c.id)} aria-label="Remove competitor"><Icon name="close" size={14}/></button></div></div>)}</div><Panel title="Observed public content"><div className="simple-list">{data.competitorPosts.map(post=><div key={post.id}><span className="list-icon"><Icon name="radar"/></span><div><strong>{post.title}</strong><small>{post.format} · {shortDate(post.observedAt)} · {post.hook}</small><small>Views {post.views?compactNumber(post.views):'N/A'} · Likes {post.likes??'N/A'} · Shares {post.shares??'N/A'}</small></div><Badge tone="info">Public / manual</Badge></div>)}</div>{!data.competitorPosts.length&&<Empty title="No observation yet" body="Tambahkan URL dan catat struktur konten yang terlihat."/>}</Panel></>;
 
   const buildInsights = () => {
     const overdue = data.tasks.filter(t=>t.status!=='Done'&&t.dueDate<jakartaDateKey());
@@ -758,9 +1003,9 @@ function App() {
   ];
   const renderIntegrations = () => <><SectionTitle title="Connected sources" eyebrow="CONNECTOR CONTROL PLANE" action={<button className="btn btn-secondary" onClick={()=>notify('Koneksi API belum diaktifkan. Lengkapi konfigurasi server dan OAuth credentials.') }><Icon name="refresh" size={14}/> Refresh status</button>}/><div className="notice notice-info"><Icon name="plug"/><span>Credential tidak boleh disimpan di browser/localStorage. Konektor produksi harus berjalan melalui backend adapter dengan token terenkripsi, rate-limit, retry, dan audit log.</span></div><div className="integration-grid">{integrationCards.map(item=><div className="integration-card" key={item.name}><div className="integration-card-top"><div className={`integration-logo logo-${item.name.toLowerCase().replace(/[^a-z]/g,'')}`}>{item.name.slice(0,1)}</div><StatusDot status={item.status}/></div><span className="eyebrow">{item.group}</span><h3>{item.name}</h3><p>{item.detail}</p><div className="integration-meta"><span>{item.frequency}</span><Badge>{item.priority}</Badge></div><button className="btn btn-secondary btn-block" onClick={()=>notify(`${item.name}: connector belum dikonfigurasi pada build lokal.`)}>Configure connector <Icon name="arrow" size={13}/></button></div>)}</div></>;
 
-  const renderSettings = () => <><SectionTitle title="Workspace settings" eyebrow="PREFERENCES & DATA CONTROL"/><div className="content-two-col"><Panel title="Workspace profile"><div className="settings-form"><label className="field"><span>Workspace name</span><input defaultValue="Daytoday Workspace"/></label><div className="form-grid"><label className="field"><span>Timezone</span><input value="Asia/Jakarta (WIB)" readOnly/></label><label className="field"><span>Currency</span><input value="IDR" readOnly/></label></div><label className="field"><span>Workspace description</span><textarea defaultValue="Marketing Intelligence & Operations workspace" rows={3}/></label><button className="btn btn-primary" onClick={()=>notify('Preferensi tampilan disimpan lokal; profile server belum tersedia.')}>Save preferences</button></div></Panel><Panel title="Local data backup"><div className="settings-action"><div><strong>Export local workspace</strong><small>JSON berisi seluruh records yang tersimpan pada browser ini.</small></div><button className="btn btn-secondary" onClick={exportJSON}><Icon name="download" size={14}/> Export</button></div><div className="settings-action"><div><strong>Restore workspace backup</strong><small>Mengganti seluruh data lokal dengan file backup pilihan.</small></div><button className="btn btn-secondary" onClick={startRestore}><Icon name="upload" size={14}/> Restore</button></div><div className="settings-action"><div><strong>Export orders CSV</strong><small>Data transaksi aktual dan status.</small></div><button className="btn btn-secondary" onClick={()=>exportCSV(data.orders,'nexus-orders.csv')}>Export CSV</button></div><input ref={restoreInput} className="visually-hidden" type="file" accept="application/json" onChange={e=>handleRestoreFile(e.target.files?.[0])}/></Panel></div><Panel title="Data dictionary"><div className="table-wrap"><table><thead><tr><th>Metric</th><th>Operational definition</th><th>Availability</th></tr></thead><tbody>{[['Spend','Biaya iklan yang dilaporkan platform','Source-dependent'],['CPM','Spend / impressions × 1.000','Calculated if available'],['Link CTR','Link clicks / impressions × 100%','Calculated if available'],['Link CPC','Spend / link clicks','Calculated if available'],['CPA','Spend / purchases sesuai atribusi','Attribution-dependent'],['ROAS','Attributed revenue / ad spend','Attribution-dependent'],['Blended ROAS','Total business revenue / paid ad spend','Period alignment required'],['AOV','Revenue / order count','Gross/net definition required'],['Engagement rate','Engagement / defined denominator','Platform-specific']].map(row=><tr key={row[0]}><td><strong>{row[0]}</strong></td><td>{row[1]}</td><td>{row[2]}</td></tr>)}</tbody></table></div></Panel><Panel title="Prototype data controls"><div className="settings-action"><div><strong>Reset to demo seed</strong><small>Mengembalikan browser ke sample dataset awal.</small></div><button className="btn btn-danger" onClick={()=>{if(window.confirm('Reset seluruh data lokal ke demo seed?')){setData(demoData);notify('Demo data di-reset.')}}}>Reset demo data</button></div><div className="helper-row"><span>Storage key: {STORAGE_KEY} · Local browser only · Last update {new Date(data.updatedAt).toLocaleString('id-ID')}</span></div></Panel></>;
+  const renderSettings = () => <><SectionTitle title="Workspace settings" eyebrow="PREFERENCES & DATA CONTROL"/><div className="content-two-col"><Panel title="Workspace profile"><div className="settings-form"><label className="field"><span>Workspace name</span><input defaultValue={workspace.name}/></label><div className="form-grid"><label className="field"><span>Timezone</span><input value="Asia/Jakarta (WIB)" readOnly/></label><label className="field"><span>Currency</span><input value="IDR" readOnly/></label></div><label className="field"><span>Workspace description</span><textarea defaultValue="Marketing Intelligence & Operations workspace" rows={3}/></label><button className="btn btn-primary" onClick={()=>notify('Preferensi tampilan disimpan lokal; profile server belum tersedia.')}>Save preferences</button></div></Panel><Panel title="Local data backup"><div className="settings-action"><div><strong>Export local workspace</strong><small>JSON berisi seluruh records yang tersimpan pada browser ini.</small></div><button className="btn btn-secondary" onClick={exportJSON}><Icon name="download" size={14}/> Export</button></div><div className="settings-action"><div><strong>Restore workspace backup</strong><small>Mengganti seluruh data lokal dengan file backup pilihan.</small></div><button className="btn btn-secondary" onClick={startRestore}><Icon name="upload" size={14}/> Restore</button></div><div className="settings-action"><div><strong>Export orders CSV</strong><small>Data transaksi aktual dan status.</small></div><button className="btn btn-secondary" onClick={()=>exportCSV(data.orders,'nexus-orders.csv')}>Export CSV</button></div><input ref={restoreInput} className="visually-hidden" type="file" accept="application/json" onChange={e=>handleRestoreFile(e.target.files?.[0])}/></Panel></div><Panel title="Data dictionary"><div className="table-wrap"><table><thead><tr><th>Metric</th><th>Operational definition</th><th>Availability</th></tr></thead><tbody>{[['Spend','Biaya iklan yang dilaporkan platform','Source-dependent'],['CPM','Spend / impressions × 1.000','Calculated if available'],['Link CTR','Link clicks / impressions × 100%','Calculated if available'],['Link CPC','Spend / link clicks','Calculated if available'],['CPA','Spend / purchases sesuai atribusi','Attribution-dependent'],['ROAS','Attributed revenue / ad spend','Attribution-dependent'],['Blended ROAS','Total business revenue / paid ad spend','Period alignment required'],['AOV','Revenue / order count','Gross/net definition required'],['Engagement rate','Engagement / defined denominator','Platform-specific']].map(row=><tr key={row[0]}><td><strong>{row[0]}</strong></td><td>{row[1]}</td><td>{row[2]}</td></tr>)}</tbody></table></div></Panel><Panel title="Prototype data controls"><div className="settings-action"><div><strong>Reset to demo seed</strong><small>Mengembalikan browser ke sample dataset awal.</small></div><button className="btn btn-danger" onClick={()=>{if(window.confirm('Ganti seluruh data operasional workspace pada server dengan demo seed? Aksi ini memengaruhi seluruh anggota workspace.')){void replaceAllData(demoData).then(()=>notify('Workspace di-reset ke demo seed.')).catch(error=>notify(error instanceof Error ? `Reset gagal: ${error.message}` : 'Reset gagal.'))}}}>Reset workspace data</button></div><div className="helper-row"><span>Storage key: {workspaceStorageKey} · Local browser only · Last update {new Date(data.updatedAt).toLocaleString('id-ID')}</span></div></Panel></>;
 
-  const renderAccess = () => <><SectionTitle title="Access management" eyebrow="OWNER-ONLY ALLOWLIST"/><div className="notice notice-warning"><Icon name="shield"/><span>Ini adalah preview UI. Kontrol role di build lokal hanya simulasi state browser dan BUKAN perlindungan keamanan. Enforcement wajib dilakukan di backend sebelum dipakai tim.</span></div><div className="summary-strip"><div><small>Account capacity</small><strong>2 / 5 owner + members</strong></div><div><small>Available seats</small><strong>3</strong></div><div><small>Public signup</small><strong>Disabled</strong></div></div><Panel title="Authorized users" action={<button className="btn btn-primary" onClick={()=>notify('Penambahan email memerlukan endpoint Owner-only backend.') }><Icon name="plus" size={14}/> Authorize email</button>}><div className="simple-list"><div><span className="avatar">O</span><div><strong>owner@workspace.local</strong><small>Owner · Initial setup · Demo identity</small></div><Badge tone="success">Active</Badge><span className="muted">Protected</span></div><div><span className="avatar avatar-1">M</span><div><strong>member@workspace.local</strong><small>Member · Demo identity</small></div><Badge tone="info">Authorized</Badge><button className="text-btn" onClick={()=>notify('Revoke access harus membatalkan semua sesi pada backend.')}>Revoke</button></div></div></Panel><Panel title="Security audit preview"><Empty title="Audit backend belum tersedia" body="Login event, allowlist change, role change, session revocation, dan unauthorized access harus ditulis pada server audit log."/></Panel></>;
+  const renderAccess = () => <AccessManagement workspaceId={workspace.id}/>;
 
   const renderPage = () => {
     switch(page) {
@@ -780,7 +1025,7 @@ function App() {
       case 'reports': return renderReports();
       case 'integrations': return renderIntegrations();
       case 'settings': return renderSettings();
-      case 'access': return profileRole==='Owner'?renderAccess():<Empty title="Owner access required" body="Halaman ini hanya tersedia untuk Owner."/>;
+      case 'access': return isOwner ? renderAccess() : <Empty title="Owner access required" body="Halaman ini hanya tersedia untuk Owner."/>;
       default: return renderOverview();
     }
   };
@@ -788,7 +1033,7 @@ function App() {
   return <div className="app-shell">
     <aside className="sidebar desktop-sidebar">{renderSidebar()}</aside>
     {drawerOpen&&<><button className="drawer-scrim" aria-label="Close navigation" onClick={()=>setDrawerOpen(false)}/><aside className="sidebar mobile-sidebar">{renderSidebar(true)}</aside></>}
-    <main className="main-shell">{renderHeader()}<div className="demo-banner"><span className="demo-dot"/><strong>LOCAL DEMO BUILD</strong><span>Sample data · browser storage · integrations inactive</span><span className="connection-label">{online?'ONLINE':'OFFLINE'}</span></div><div className="page-content"><div className="page-heading">{page!=='overview'&&<><div className="page-heading-copy"><span className="eyebrow">{pageMeta.phase}</span><h1>{pageMeta.title}</h1><p>{pageMeta.subtitle}</p></div>{page==='campaign-detail'&&null}</>}</div>{renderPage()}<footer className="app-footer"><span>NEXUS v0.3 · Nocturne interface</span><span>Updated locally · {new Date(data.updatedAt).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'})} WIB</span></footer></div></main>
+    <main className="main-shell">{renderHeader()}<div className="demo-banner"><span className="demo-dot"/><strong>AUTHENTICATED SESSION</strong><span>Business records: PostgreSQL · Orders & Ads: browser-local</span><span className="connection-label">{savingCount>0?'SAVING':online?'SYNCED':'OFFLINE'}</span></div><div className="page-content"><div className="page-heading">{page!=='overview'&&<><div className="page-heading-copy"><span className="eyebrow">{pageMeta.phase}</span><h1>{pageMeta.title}</h1><p>{pageMeta.subtitle}</p></div>{page==='campaign-detail'&&null}</>}</div>{renderPage()}<footer className="app-footer"><span>NEXUS v0.4 · Nocturne interface</span><span>{dataStatus} · {new Date(data.updatedAt).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'})} WIB</span></footer></div></main>
     <nav className="mobile-bottom-nav" aria-label="Mobile navigation">{[{id:'overview' as PageId,label:'Home',icon:'grid'},{id:'campaigns' as PageId,label:'Plan',icon:'layers'},{id:'tasks' as PageId,label:'Tasks',icon:'check-square'},{id:'analytics' as PageId,label:'Insights',icon:'activity'}].map(item=><button key={item.id} className={page===item.id?'active':''} onClick={()=>navigate(item.id)}><Icon name={item.icon} size={18}/><span>{item.label}</span></button>)}</nav>
     <button className="ai-launcher" onClick={()=>setAiOpen(true)} aria-label="Open NEXUS AI assistant"><span><Icon name="sparkles" size={19}/></span><b>Ask NEXUS</b></button>
     {aiOpen&&<><button className="ai-scrim" aria-label="Close assistant" onClick={()=>setAiOpen(false)}/><aside className="ai-panel glass"><div className="ai-panel-head"><div className="ai-title"><span className="ai-orb"><Icon name="sparkles" size={19}/></span><div><strong>NEXUS Assistant</strong><small>{pageMeta.phase} · {activePage}</small></div></div><button className="icon-btn" onClick={()=>setAiOpen(false)} aria-label="Close assistant"><Icon name="close"/></button></div><div className="ai-context"><span className="eyebrow">CURRENT PAGE FOCUS</span><strong>{page==='overview'?'Revenue quality & operational priority':page==='campaigns'?'Campaign completeness & ownership':page==='tasks'?'Task bottlenecks & deadlines':page==='content'?'Hook, format & content pipeline':page==='budget'?'Budget pacing & commitment':'Data availability & decision quality'}</strong><p>Context: {activePage} · Period {dateRange} · {data.campaigns.length} campaign records</p></div><div className="ai-review-card"><Badge tone="warning">RULE-BASED DEMO</Badge><h3>{overdueTasks.length?`${overdueTasks.length} overdue tasks need attention`:'No critical task delay detected'}</h3><p>{overdueTasks.length?'Tinjau overdue task dan approval sebelum menambah beban campaign.':'Lanjutkan monitoring data freshness dan kelengkapan source.'}</p><div className="ai-evidence"><small>Evidence</small><span>{overdueTasks.map(t=>t.title).join(' · ')||'No overdue record in current local data.'}</span></div></div><div className="ai-review-card secondary"><h3>Ask about this page</h3><p>Assistant produksi akan menggunakan retrieval ke database NEXUS dan menyertakan source reference. Mode ini belum terhubung ke model AI.</p><div className="ai-suggestions"><button onClick={()=>{navigate('ai-lab');setAiOpen(false)}}>Evaluate data gaps <Icon name="arrow" size={12}/></button><button onClick={()=>{navigate('tasks');setAiOpen(false)}}>Review overdue tasks <Icon name="arrow" size={12}/></button></div></div><div className="ai-input-row"><input placeholder="AI provider belum dikonfigurasi" disabled/><button disabled aria-label="Send message"><Icon name="arrow"/></button></div><small className="ai-disclaimer">AI hanya memberi rekomendasi. Aksi operasional tetap memerlukan persetujuan pengguna.</small></aside></>}

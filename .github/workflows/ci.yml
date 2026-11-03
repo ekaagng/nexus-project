@@ -1,0 +1,83 @@
+name: NEXUS checks
+
+on:
+  pull_request:
+    branches:
+      - main
+      - 'feat/**'
+  push:
+    branches:
+      - main
+      - 'feat/**'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Configure PostgreSQL roles
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE nexus_migrator LOGIN PASSWORD 'migrator-ci';
+          CREATE ROLE nexus_app LOGIN PASSWORD 'runtime-ci';
+          CREATE DATABASE nexus OWNER nexus_migrator;
+          GRANT CONNECT ON DATABASE nexus TO nexus_app;
+          SQL
+          PGPASSWORD=migrator-ci psql -h localhost -U nexus_migrator -d nexus -v ON_ERROR_STOP=1 -c "GRANT USAGE ON SCHEMA public TO nexus_app;"
+
+      - name: Apply PostgreSQL migrations
+        env:
+          NODE_ENV: test
+          DATABASE_URL: postgresql://nexus_app:runtime-ci@localhost:5432/nexus
+          MIGRATION_DATABASE_URL: postgresql://nexus_migrator:migrator-ci@localhost:5432/nexus
+        run: npm run db:migrate
+
+      - name: Verify PostgreSQL RLS and workspace limits
+        env:
+          PGPASSWORD: runtime-ci
+        run: psql -h localhost -U nexus_app -d nexus -v ON_ERROR_STOP=1 -f server/test/db-rls.smoke.sql
+
+      - name: Dependency audit summary
+        run: |
+          npm audit --json > audit.json || true
+          node -e "const a=require('./audit.json'); console.log('Vulnerabilities:', a.metadata?.vulnerabilities); for (const [name, v] of Object.entries(a.vulnerabilities || {})) console.log(name, v.severity, 'range=' + v.range, 'fix=' + JSON.stringify(v.fixAvailable));"
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Typecheck backend
+        run: npm run typecheck:server
+
+      - name: Build backend
+        run: npm run build:server
+
+      - name: Test backend utilities
+        run: npm run test:server

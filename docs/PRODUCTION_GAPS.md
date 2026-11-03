@@ -1,3 +1,5 @@
+> **Backend implementation update (2026-11-03):** `feat/data-integration-foundation` adds the PostgreSQL/Fastify foundation. Its child branch `feat/authentication-management` adds Owner-only workspace member/invitation APIs, verified-email invitation acceptance, reserved seat enforcement and access audit events. See [DATA_INTEGRATION_FOUNDATION.md](DATA_INTEGRATION_FOUNDATION.md) and [WORKSPACE_ACCESS_MANAGEMENT.md](WORKSPACE_ACCESS_MANAGEMENT.md). A generic OIDC Authorization Code + PKCE flow, opaque PostgreSQL-backed browser sessions, CSRF Origin checks, logout and session revocation are now implemented on the child branch. A real provider must still be configured, and the React frontend is not yet connected to the session endpoints.
+
 # NEXUS v0.3 — Implementation traceability & production gaps
 
 ## 1. Implemented in this baseline
@@ -22,7 +24,7 @@
 | Section 8.14 — Social analytics | Channel coverage and content metric display | UI/data model baseline only; official OAuth/API unavailable |
 | Section 8.15 — Competitor Intelligence | Account list, public/manual observation records, public metric labels | Manual-only; no scraping or unofficial acquisition |
 | Section 8.16 — AI Assistant | Page-aware assistant drawer, focus text, rule-based evidence/data-gap output, action handoff | Rule-based demo; no LLM/RAG |
-| Section 8.18 — Access Management | Owner-only navigation visibility and page UI in demo role state | Visual simulation only; not a security boundary |
+| Section 8.18 — Access Management | Owner-only navigation visibility in the demo frontend; backend Owner-only member/invitation list, invite, acceptance and revoke endpoints on `feat/authentication-management` | Backend access-governance partial; frontend UI is not wired to API; production login/session controls remain incomplete |
 | Section 13 — PWA | Manifest, app icon, service worker shell/runtime cache, offline indicator, local last-known records | Implemented for frontend baseline |
 | Section 11.9 — Floating Back | Two-step campaign wizard with persistent form state and previous-step label | Implemented |
 | Section 11.10 — Contextual AI | Launcher is available across pages and panel reflects current page/phase context | Implemented as demo shell |
@@ -32,10 +34,9 @@
 ### Identity, sessions and access governance
 
 - Choose and configure the production login method (Google OAuth, password, magic link, or combination). The PRD has not finalized this.
-- Implement a server-owned allowlist table with one immutable initial Owner and at most four Members.
-- Enforce closed registration, workspace membership, Owner-only Access Management, Owner-only invite/revoke, and seat count in backend handlers and database policies.
-- Implement opaque server sessions, expiry, rotation, CSRF protections, logout, revoke-all-user-sessions, and session revalidation on every protected request.
-- Add audit events for login, invalid access, allowlist changes, role changes, session revoke, and security anomaly.
+- **Implemented on `feat/authentication-management`:** a server-owned workspace invitation allowlist; immutable initial Owner; Owner-only list/invite/revoke endpoints; verified-email invitation acceptance; Member revocation; five-seat enforcement including pending invitations; and audit events for invitation create/accept/expire/revoke and Member revoke.
+- **Implemented on the branch:** provider-neutral OIDC Authorization Code + PKCE (S256), state/nonce validation, encrypted short-lived PKCE verifier storage, opaque server sessions with hashed tokens and fixed expiry, per-request session revalidation, SameSite/HttpOnly cookies, exact-Origin CSRF checks, logout, list/revoke-one/revoke-all session endpoints, and security events for login/logout/revocation.
+- Still required: register and configure a real identity provider; connect the React login/access/session UI; implement session rotation/renewal, global IdP logout, account suspension/deactivation, email delivery and additional security anomaly monitoring.
 - Define granular Member permissions beyond the confirmed Access Management restriction.
 
 ### Database and domain API
@@ -82,9 +83,9 @@
 
 | Capability | Current state |
 |---|---|
-| Shared multi-user workspace | Not implemented — browser-local data only |
-| Real login / allowlist / session revoke | Not implemented — role switch is UI simulation |
-| Backend database and workspace isolation | Not implemented |
+| Shared multi-user workspace | Backend workspace/membership and integration foundation exists; business-domain records and frontend remain browser-local |
+| Real login / allowlist / session revoke | Backend OIDC PKCE flow and opaque session lifecycle are implemented but require provider configuration; frontend remains localStorage-backed and is not wired to login/session endpoints |
+| Backend database and workspace isolation | Partial — PostgreSQL RLS currently covers workspace, membership and integration foundation tables; business-domain data migration remains |
 | Official Meta/Scalev/Lynk/social API integrations | Not connected |
 | Scheduled 00:00 WIB PDF + Gmail delivery | Not implemented — manual browser print only |
 | Google Drive backup/restore | Not implemented — local JSON export/restore only |

@@ -42,6 +42,24 @@ export type WorkspaceData = {
   updatedAt: string;
 };
 
+export function createEmptyWorkspaceData(): WorkspaceData {
+  return {
+    campaigns: [],
+    tasks: [],
+    contents: [],
+    expenses: [],
+    kols: [],
+    orders: [],
+    ads: [],
+    briefs: [],
+    experiments: [],
+    competitors: [],
+    competitorPosts: [],
+    notifications: [],
+    updatedAt: new Date().toISOString()
+  };
+}
+
 /** Calendar date key fixed to the PRD workspace timezone (Asia/Jakarta). */
 export function jakartaDateKey(value: Date = new Date()): string {
   const parts = new Intl.DateTimeFormat('en-CA', {
@@ -125,9 +143,9 @@ export const demoData: WorkspaceData = {
 };
 
 export const STORAGE_KEY = 'nexus.workspace.v03';
-export function loadWorkspace(): WorkspaceData {
+export function loadWorkspace(storageKey: string = STORAGE_KEY): WorkspaceData {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(storageKey);
     if (!raw) return demoData;
     const parsed = JSON.parse(raw) as WorkspaceData;
     if (!parsed || !Array.isArray(parsed.campaigns) || !Array.isArray(parsed.tasks)) return demoData;
