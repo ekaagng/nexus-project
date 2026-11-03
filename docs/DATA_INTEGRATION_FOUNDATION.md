@@ -31,7 +31,7 @@ Provider-specific fields must be normalized before they reach dashboard queries.
 - **Runtime:** Node.js 20+, TypeScript and Fastify.
 - **Database:** PostgreSQL.
 - **Identity boundary:** OIDC JWT validation through issuer, audience and JWKS configuration. The identity provider itself is deliberately not selected in code.
-- **Tenant boundary:** every workspace request uses `X-Workspace-Id`; membership is checked inside a transaction. PostgreSQL Row-Level Security is enabled on tenant tables. Database constraints also enforce one active Owner and a maximum of five active members per workspace.
+- **Tenant boundary:** every workspace request uses `X-Workspace-Id`; membership is checked inside a transaction. PostgreSQL Row-Level Security is enabled on tenant tables. Database constraints also enforce the immutable initial Owner, one active Owner per workspace, and a maximum of five reserved seats (active members plus pending invitations).
 - **Secret storage:** AES-256-GCM envelope for access/refresh tokens. Ciphertext, IV, authentication tag and key version are stored separately from connection metadata. The browser never receives token values.
 - **Connector boundary:** server-only registry and adapter interface. No provider adapter is registered in this baseline.
 - **Sync persistence:** connection-scoped jobs, period windows, idempotency keys, cursors, attempt counts and safe error fields are modeled in PostgreSQL.
@@ -40,7 +40,7 @@ Provider-specific fields must be normalized before they reach dashboard queries.
 
 | Table | Purpose |
 |---|---|
-| `workspaces`, `workspace_members` | Workspace ownership, active membership, one active Owner, and at most five active seats |
+| `workspaces`, `workspace_members` | Workspace ownership, active membership, an immutable initial Owner, and at most five active or invited seats |
 | `integration_connections` | Provider/account metadata and connection health |
 | `integration_secrets` | Encrypted access and refresh tokens |
 | `sync_jobs`, `sync_cursors` | Sync request history and incremental cursor state |
