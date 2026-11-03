@@ -10,6 +10,7 @@ async function main(): Promise<void> {
   if (!config.migrationDatabaseUrl) {
     throw new Error('MIGRATION_DATABASE_URL is required. Run migrations with the dedicated schema-owner role.');
   }
+
   const pool = new Pool({
     connectionString: config.migrationDatabaseUrl,
     ssl: config.databaseSsl ? { rejectUnauthorized: true } : undefined
