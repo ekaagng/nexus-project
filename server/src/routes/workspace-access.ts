@@ -109,12 +109,20 @@ export async function registerWorkspaceAccessRoutes(
     const workspaceId = getWorkspaceHeader(request.headers['x-workspace-id']);
     const members = await withOwnerContext(pool, user, workspaceId, async (client) => {
       const result = await client.query(
-        `SELECT user_id, role, status, created_at, updated_at
-           FROM workspace_members
-          WHERE workspace_id = $1::uuid
-            AND status = 'active'
-            AND user_id NOT LIKE 'invite:%'
-          ORDER BY CASE role WHEN 'owner' THEN 0 ELSE 1 END, created_at ASC`,
+        `SELECT wm.user_id, identity.email, wm.role, wm.status, wm.created_at, wm.updated_at
+           FROM workspace_members wm
+           LEFT JOIN LATERAL (
+             SELECT email
+               FROM auth_sessions
+              WHERE user_id = wm.user_id
+                AND email IS NOT NULL
+              ORDER BY created_at DESC
+              LIMIT 1
+           ) identity ON TRUE
+          WHERE wm.workspace_id = $1::uuid
+            AND wm.status = 'active'
+            AND wm.user_id NOT LIKE 'invite:%'
+          ORDER BY CASE wm.role WHEN 'owner' THEN 0 ELSE 1 END, wm.created_at ASC`,
         [workspaceId]
       );
       return result.rows;
