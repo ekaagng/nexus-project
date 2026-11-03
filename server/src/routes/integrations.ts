@@ -1,4 +1,4 @@
-import type { FastifyInstance, FastifyRequest } from 'fastify';
+import type { FastifyInstance, FastifyRequest, preHandlerHookHandler } from 'fastify';
 import type { Pool } from 'pg';
 import { getWorkspaceHeader, withWorkspaceContext } from '../db.js';
 import { AppError } from '../errors.js';
@@ -9,7 +9,7 @@ function requireUser(request: FastifyRequest): AuthenticatedUser {
   return request.authUser;
 }
 
-export async function registerIntegrationRoutes(app: FastifyInstance, pool: Pool, authenticate: (request: FastifyRequest) => Promise<void>): Promise<void> {
+export async function registerIntegrationRoutes(app: FastifyInstance, pool: Pool, authenticate: preHandlerHookHandler): Promise<void> {
   app.get('/api/v1/integrations', { preHandler: authenticate }, async (request) => {
     const user = requireUser(request);
     const workspaceId = getWorkspaceHeader(request.headers['x-workspace-id']);
