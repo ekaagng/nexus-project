@@ -3,7 +3,7 @@
 **Baseline:** PRD NEXUS v0.3 · Nocturne / Midnight Observatory  
 **Current implementation:** React/Vite demo frontend + PostgreSQL/Fastify backend foundations.
 
-The frontend still runs as a local demo by default. Backend foundations add a workspace-scoped API, OIDC token verification and Authorization Code + PKCE login, PostgreSQL-backed opaque browser sessions, PostgreSQL tenant isolation, encrypted-secret storage primitives, normalized integration contracts, sync-job metadata and Owner-managed workspace access. Provider APIs and production browser sessions are not connected.
+The frontend still runs as a local demo by default. Backend foundations add a workspace-scoped API, OIDC token verification and Authorization Code + PKCE login, PostgreSQL-backed opaque browser sessions, PostgreSQL tenant isolation, encrypted-secret storage primitives, normalized integration contracts, sync-job metadata and Owner-managed workspace access. Provider APIs are not connected. Browser login/session endpoints are implemented in the backend but require a configured OIDC provider; the frontend is not wired to them yet.
 
 ## Frontend already implemented
 
