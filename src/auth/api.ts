@@ -19,7 +19,7 @@ export type WorkspaceSummary = {
   timezone: string;
   currency: string;
   role: 'owner' | 'member';
-  status: 'active';
+  status?: 'active';
   created_at: string;
 };
 
