@@ -124,19 +124,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = useCallback(async () => {
     try {
-      await fetch(
-        (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '') + '/api/v1/auth/logout',
-        { method: 'POST', credentials: 'include', cache: 'no-store', headers: { accept: 'application/json' } }
-      );
-    } finally {
-      setSession(null);
-      setStatus('anonymous');
-      try {
-        const readiness = await getOidcStatus();
-        setLoginAvailable(readiness.loginAvailable);
-      } catch {
-        setLoginAvailable(false);
-      }
+      await apiRequest('/api/v1/auth/logout', { method: 'POST' });
+    } catch (error) {
+      if (!(error instanceof ApiError && error.status === 401)) throw error;
+    }
+
+    setSession(null);
+    setStatus('anonymous');
+    try {
+      const readiness = await getOidcStatus();
+      setLoginAvailable(readiness.loginAvailable);
+    } catch {
+      setLoginAvailable(false);
     }
   }, []);
 
