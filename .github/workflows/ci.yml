@@ -6,9 +6,6 @@ on:
       - main
       - 'feat/**'
   push:
-    branches:
-      - main
-      - 'feat/**'
 
 permissions:
   contents: read
@@ -37,9 +34,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Configure PostgreSQL roles
         env:
@@ -65,10 +63,8 @@ jobs:
           PGPASSWORD: runtime-ci
         run: psql -h localhost -U nexus_app -d nexus -v ON_ERROR_STOP=1 -f server/test/db-rls.smoke.sql
 
-      - name: Dependency audit summary
-        run: |
-          npm audit --json > audit.json || true
-          node -e "const a=require('./audit.json'); console.log('Vulnerabilities:', a.metadata?.vulnerabilities); for (const [name, v] of Object.entries(a.vulnerabilities || {})) console.log(name, v.severity, 'range=' + v.range, 'fix=' + JSON.stringify(v.fixAvailable));"
+      - name: Audit dependencies (fail on high or critical)
+        run: npm audit --audit-level=high
 
       - name: Build frontend
         run: npm run build
@@ -79,5 +75,8 @@ jobs:
       - name: Build backend
         run: npm run build:server
 
-      - name: Test backend utilities
+      - name: Test backend
         run: npm run test:server
+
+      - name: Test frontend data layer
+        run: npm run test:frontend
