@@ -38,8 +38,19 @@ jobs:
         with:
           node-version: 22
 
-      - name: Install dependencies
-        run: npm install
+      - name: Generate package lockfile (one-time bootstrap)
+        run: npm install --package-lock-only --ignore-scripts --no-audit
+
+      - name: Upload generated package lockfile
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-lockfile-bootstrap
+          path: package-lock.json
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Install dependencies from lockfile
+        run: npm ci
 
       - name: Configure PostgreSQL roles
         env:
@@ -65,10 +76,8 @@ jobs:
           PGPASSWORD: runtime-ci
         run: psql -h localhost -U nexus_app -d nexus -v ON_ERROR_STOP=1 -f server/test/db-rls.smoke.sql
 
-      - name: Dependency audit summary
-        run: |
-          npm audit --json > audit.json || true
-          node -e "const a=require('./audit.json'); console.log('Vulnerabilities:', a.metadata?.vulnerabilities); for (const [name, v] of Object.entries(a.vulnerabilities || {})) console.log(name, v.severity, 'range=' + v.range, 'fix=' + JSON.stringify(v.fixAvailable));"
+      - name: Audit dependencies (fail on high or critical)
+        run: npm audit --audit-level=high
 
       - name: Build frontend
         run: npm run build
@@ -79,5 +88,8 @@ jobs:
       - name: Build backend
         run: npm run build:server
 
-      - name: Test backend utilities
+      - name: Test backend
         run: npm run test:server
+
+      - name: Test frontend data layer
+        run: npm run test:frontend
