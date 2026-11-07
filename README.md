@@ -54,7 +54,7 @@ No Meta Ads, Scalev, Lynk.id, Instagram, TikTok or YouTube provider adapter is r
 1. Install packages:
 
    ```bash
-   npm install
+   npm ci
    ```
 
 2. Copy `.env.example` to `.env`. Set `DATABASE_URL` to the restricted `nexus_app` connection and `MIGRATION_DATABASE_URL` to the dedicated schema-owner connection; migrations will refuse to run without it.
@@ -97,14 +97,19 @@ npm run typecheck
 npm run typecheck:server
 npm run build
 npm run build:server
+npm test
 npm run test:server
+npm run test:frontend
 ```
+
+Test files are discovered recursively: `*.test.*` and `*.spec.*` under `server/test` run with `test:server`; matching files under `src` run with `test:frontend`. Add a test file in the relevant directory and it is picked up automatically—no package script edit is needed. PostgreSQL RLS smoke checks run separately in GitHub Actions after migrations.
 
 ## Documentation
 
 - [Data Integration Foundation](docs/DATA_INTEGRATION_FOUNDATION.md)
 - [Workspace Access Management](docs/WORKSPACE_ACCESS_MANAGEMENT.md)
 - [Production Gaps](docs/PRODUCTION_GAPS.md)
+- [Testing Guide](docs/TESTING.md)
 
 ## Explicit production gaps
 
